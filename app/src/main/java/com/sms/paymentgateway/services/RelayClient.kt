@@ -370,10 +370,10 @@ class RelayClient(private val context: Context) {
     /**
      * الحصول على حالة الاتصال
      */
-    fun isConnected(): Boolean = isConnected && webSocket != null
+    fun isConnected(): Boolean = this.isConnected && webSocket != null
 
     /**
      * الحصول على حالة الخدمة
      */
-    fun isStarted(): Boolean = isStarted
+    fun isStarted(): Boolean = this.isStarted
 }
