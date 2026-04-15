@@ -17,23 +17,23 @@ class SecurityManager @Inject constructor(
 
     private val prefs: SharedPreferences = context.getSharedPreferences("security_prefs", Context.MODE_PRIVATE)
     
-    private val apiKey: String
+    private val _apiKey: String
         get() = prefs.getString("api_key", null) ?: generateAndSaveApiKey()
 
-    private val hmacSecret: String
+    private val _hmacSecret: String
         get() = prefs.getString("hmac_secret", null) ?: generateAndSaveHmacSecret()
 
     fun validateApiKey(providedKey: String?): Boolean {
         if (providedKey == null) return false
-        return providedKey == apiKey
+        return providedKey == _apiKey
     }
 
-    fun getApiKey(): String = apiKey
+    fun getApiKey(): String = _apiKey
 
     fun generateHmacSignature(data: String): String {
         return try {
             val mac = Mac.getInstance("HmacSHA256")
-            val secretKey = SecretKeySpec(hmacSecret.toByteArray(), "HmacSHA256")
+            val secretKey = SecretKeySpec(_hmacSecret.toByteArray(), "HmacSHA256")
             mac.init(secretKey)
             val hmacBytes = mac.doFinal(data.toByteArray())
             hmacBytes.joinToString("") { "%02x".format(it) }
