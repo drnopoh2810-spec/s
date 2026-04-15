@@ -9,6 +9,9 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -43,7 +46,7 @@ class PaymentGatewayService : Service() {
 
         // Start periodic cleanup
         try {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            CoroutineScope(Dispatchers.IO).launch {
                 cleanupManager.startPeriodicCleanup(intervalHours = 1)
             }
             Timber.i("Cleanup manager started")
@@ -53,7 +56,7 @@ class PaymentGatewayService : Service() {
 
         // Start Relay Client (connects to cloud relay server)
         try {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            CoroutineScope(Dispatchers.IO).launch {
                 relayClient.start()
             }
             Timber.i("Relay client started")
