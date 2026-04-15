@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sms.paymentgateway.presentation.viewmodels.SettingsViewModel
@@ -20,9 +21,12 @@ fun SettingsScreen(
 ) {
     val apiKey by viewModel.apiKey.collectAsState()
     val webhookUrl by viewModel.webhookUrl.collectAsState()
+    val relayUrl by viewModel.relayUrl.collectAsState()
+    val relayConnected by viewModel.relayConnected.collectAsState()
     val ipWhitelist by viewModel.ipWhitelist.collectAsState()
 
     var showWebhookDialog by remember { mutableStateOf(false) }
+    var showRelayDialog by remember { mutableStateOf(false) }
     var showIpDialog by remember { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
 
@@ -75,6 +79,86 @@ fun SettingsScreen(
                             )
                         }
                         Icon(Icons.Default.Refresh, "Regenerate")
+                    }
+                }
+            }
+
+            // ── Relay Server Section ──────────────────────────────────────
+            item {
+                Text(
+                    text = "Relay Server (Cloud Connection)",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        viewModel.refreshRelayStatus()
+                        showRelayDialog = true
+                    },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (relayConnected)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Relay Server URL",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Badge(
+                                    containerColor = if (relayConnected) Color(0xFF2E7D32) else Color(0xFFB71C1C)
+                                ) {
+                                    Text(
+                                        text = if (relayConnected) "Connected" else "Offline",
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            Text(
+                                text = relayUrl.ifEmpty { "Not configured — tap to set up" },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Icon(Icons.Default.Edit, "Edit")
+                    }
+                }
+            }
+
+            if (relayUrl.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "How websites connect to your device:",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = relayUrl.replace("wss://", "https://").replace("/device", "/api/v1/"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
@@ -177,7 +261,8 @@ fun SettingsScreen(
         }
     }
 
-    // Dialogs
+    // ── Dialogs ───────────────────────────────────────────────────────
+
     if (showApiKeyDialog) {
         AlertDialog(
             onDismissRequest = { showApiKeyDialog = false },
@@ -187,14 +272,49 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     viewModel.regenerateApiKey()
                     showApiKeyDialog = false
-                }) {
-                    Text("Regenerate")
-                }
+                }) { Text("Regenerate") }
             },
             dismissButton = {
-                TextButton(onClick = { showApiKeyDialog = false }) {
-                    Text("Cancel")
+                TextButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showRelayDialog) {
+        var url by remember { mutableStateOf(relayUrl) }
+        AlertDialog(
+            onDismissRequest = { showRelayDialog = false },
+            title = { Text("Relay Server URL") },
+            text = {
+                Column {
+                    Text(
+                        text = "أدخل عنوان WebSocket لخادم الوسيط. مثال:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "wss://your-relay.replit.app/device",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = { Text("Relay WebSocket URL") },
+                        placeholder = { Text("wss://your-relay.replit.app/device") },
+                        singleLine = true
+                    )
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.updateRelayUrl(url.trim())
+                    showRelayDialog = false
+                }) { Text("Save & Connect") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRelayDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -216,14 +336,10 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     viewModel.updateWebhookUrl(url)
                     showWebhookDialog = false
-                }) {
-                    Text("Save")
-                }
+                }) { Text("Save") }
             },
             dismissButton = {
-                TextButton(onClick = { showWebhookDialog = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showWebhookDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -249,14 +365,10 @@ fun SettingsScreen(
                             showIpDialog = false
                         }
                     }
-                ) {
-                    Text("Add")
-                }
+                ) { Text("Add") }
             },
             dismissButton = {
-                TextButton(onClick = { showIpDialog = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showIpDialog = false }) { Text("Cancel") }
             }
         )
     }
