@@ -56,7 +56,7 @@ android {
     }
     
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.4"
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
 }
 
@@ -92,7 +92,7 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
     
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
     
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
