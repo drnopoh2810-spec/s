@@ -61,6 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -88,6 +90,9 @@ jobs:
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build Release APK (unsigned)
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Get version name
         id: version
@@ -118,9 +123,11 @@ jobs:
             ### طريقة الاستخدام
             1. ثبّت APK على الهاتف
             2. افتح التطبيق واحصل على API Key
-            3. اضبط Webhook URL من الإعدادات
-            4. أي موقع يمكنه الاتصال بـ http://&lt;phone-ip&gt;:8080/api/v1
-          files: app/build/outputs/apk/debug/app-debug.apk
+            3. اضبط Relay Server URL من الإعدادات
+            4. استخدم الـ API من أي موقع عبر Relay Server
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
           draft: false
           prerelease: false
         env:
