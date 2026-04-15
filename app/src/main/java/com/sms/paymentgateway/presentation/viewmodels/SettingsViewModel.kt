@@ -2,6 +2,7 @@ package com.sms.paymentgateway.presentation.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sms.paymentgateway.services.RelayClient
 import com.sms.paymentgateway.utils.security.SecurityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val securityManager: SecurityManager
+    private val securityManager: SecurityManager,
+    private val relayClient: RelayClient
 ) : ViewModel() {
 
     private val _apiKey = MutableStateFlow(securityManager.getApiKey())
@@ -20,6 +22,12 @@ class SettingsViewModel @Inject constructor(
 
     private val _webhookUrl = MutableStateFlow(securityManager.getWebhookUrl() ?: "")
     val webhookUrl: StateFlow<String> = _webhookUrl.asStateFlow()
+
+    private val _relayUrl = MutableStateFlow(securityManager.getRelayUrl() ?: "")
+    val relayUrl: StateFlow<String> = _relayUrl.asStateFlow()
+
+    private val _relayConnected = MutableStateFlow(relayClient.isConnected())
+    val relayConnected: StateFlow<Boolean> = _relayConnected.asStateFlow()
 
     private val _ipWhitelist = MutableStateFlow(securityManager.getIpWhitelist().toList())
     val ipWhitelist: StateFlow<List<String>> = _ipWhitelist.asStateFlow()
@@ -36,6 +44,25 @@ class SettingsViewModel @Inject constructor(
             securityManager.setWebhookUrl(url)
             _webhookUrl.value = url
         }
+    }
+
+    fun updateRelayUrl(url: String) {
+        viewModelScope.launch {
+            if (url.isBlank()) {
+                securityManager.clearRelayUrl()
+                relayClient.stop()
+            } else {
+                securityManager.setRelayUrl(url)
+                relayClient.stop()
+                relayClient.start()
+            }
+            _relayUrl.value = url
+            _relayConnected.value = relayClient.isConnected()
+        }
+    }
+
+    fun refreshRelayStatus() {
+        _relayConnected.value = relayClient.isConnected()
     }
 
     fun addIpToWhitelist(ip: String) {
