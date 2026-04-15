@@ -1,0 +1,181 @@
+{
+  "info": {
+    "name": "SMS Payment Gateway API",
+    "description": "Complete API collection for SMS Payment Gateway Android App",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "YOUR_API_KEY_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the API server is running"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Transaction",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"order-{{$randomInt}}\",\n  \"amount\": 500.00,\n  \"phoneNumber\": \"01012345678\",\n  \"expectedTxId\": \"VC123456789\",\n  \"walletType\": \"VODAFONE_CASH\",\n  \"expiresInMinutes\": 30\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/transactions",
+          "host": ["{{base_url}}"],
+          "path": ["transactions"]
+        },
+        "description": "Create a new pending transaction"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Transaction by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transactions/order-123",
+          "host": ["{{base_url}}"],
+          "path": ["transactions", "order-123"]
+        },
+        "description": "Get status of a specific transaction"
+      },
+      "response": []
+    },
+    {
+      "name": "List All Transactions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transactions",
+          "host": ["{{base_url}}"],
+          "path": ["transactions"]
+        },
+        "description": "Get all pending transactions"
+      },
+      "response": []
+    },
+    {
+      "name": "Get SMS Logs",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/sms/logs",
+          "host": ["{{base_url}}"],
+          "path": ["sms", "logs"]
+        },
+        "description": "Get all received SMS logs"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Scenarios",
+      "item": [
+        {
+          "name": "Vodafone Cash - 500 EGP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"vodafone-test-{{$timestamp}}\",\n  \"amount\": 500.00,\n  \"phoneNumber\": \"01012345678\",\n  \"walletType\": \"VODAFONE_CASH\",\n  \"expiresInMinutes\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["transactions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Orange Money - 750 EGP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"orange-test-{{$timestamp}}\",\n  \"amount\": 750.00,\n  \"phoneNumber\": \"01112345678\",\n  \"walletType\": \"ORANGE_MONEY\",\n  \"expiresInMinutes\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["transactions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "InstaPay - 1000 EGP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"instapay-test-{{$timestamp}}\",\n  \"amount\": 1000.00,\n  \"phoneNumber\": \"01212345678\",\n  \"walletType\": \"INSTAPAY\",\n  \"expiresInMinutes\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["transactions"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
