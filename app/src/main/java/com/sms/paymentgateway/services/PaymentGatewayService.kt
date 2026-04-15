@@ -21,6 +21,9 @@ class PaymentGatewayService : Service() {
     @Inject
     lateinit var cleanupManager: CleanupManager
 
+    @Inject
+    lateinit var relayClient: RelayClient
+
     private val CHANNEL_ID = "payment_gateway_channel"
     private val NOTIFICATION_ID = 1
 
@@ -47,6 +50,16 @@ class PaymentGatewayService : Service() {
         } catch (e: Exception) {
             Timber.e(e, "Failed to start cleanup manager")
         }
+
+        // Start Relay Client (connects to cloud relay server)
+        try {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                relayClient.start()
+            }
+            Timber.i("Relay client started")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to start relay client")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -58,6 +71,7 @@ class PaymentGatewayService : Service() {
         super.onDestroy()
         apiServer.stop()
         cleanupManager.stopCleanup()
+        relayClient.stop()
         Timber.i("PaymentGatewayService destroyed")
     }
 
