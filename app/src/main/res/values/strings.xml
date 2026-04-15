@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SMS Payment Gateway</string>
+    <string name="service_notification_title">SMS Payment Gateway</string>
+    <string name="service_notification_text">Service is running and monitoring SMS</string>
+</resources>
