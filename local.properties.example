@@ -1,0 +1,10 @@
+# ملف مثال لـ local.properties
+# انسخ هذا الملف إلى local.properties وأضف قيمك الخاصة
+
+# مفتاح API الخاص بـ Relay Server
+RELAY_API_KEY=your_relay_api_key_here
+
+# ملاحظات:
+# - لا ترفع ملف local.properties إلى Git
+# - هذا الملف للتطوير المحلي فقط
+# - في CI/CD، يتم استخدام GitHub Secrets

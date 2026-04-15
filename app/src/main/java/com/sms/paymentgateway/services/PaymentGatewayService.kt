@@ -26,22 +26,25 @@ class PaymentGatewayService : Service() {
 
     @Inject
     lateinit var relayClient: RelayClient
+    
+    @Inject
+    lateinit var connectionMonitor: ConnectionMonitor
 
     private val CHANNEL_ID = "payment_gateway_channel"
     private val NOTIFICATION_ID = 1
 
     override fun onCreate() {
         super.onCreate()
-        Timber.i("PaymentGatewayService created")
+        Timber.i("🚀 PaymentGatewayService created")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
         // Start API Server
         try {
             apiServer.start()
-            Timber.i("API Server started on port 8080")
+            Timber.i("✅ API Server started on port 8080")
         } catch (e: Exception) {
-            Timber.e(e, "Failed to start API Server")
+            Timber.e(e, "❌ Failed to start API Server")
         }
 
         // Start periodic cleanup
@@ -49,9 +52,9 @@ class PaymentGatewayService : Service() {
             CoroutineScope(Dispatchers.IO).launch {
                 cleanupManager.startPeriodicCleanup(intervalHours = 1)
             }
-            Timber.i("Cleanup manager started")
+            Timber.i("✅ Cleanup manager started")
         } catch (e: Exception) {
-            Timber.e(e, "Failed to start cleanup manager")
+            Timber.e(e, "❌ Failed to start cleanup manager")
         }
 
         // Start Relay Client (connects to cloud relay server)
@@ -59,23 +62,68 @@ class PaymentGatewayService : Service() {
             CoroutineScope(Dispatchers.IO).launch {
                 relayClient.start()
             }
-            Timber.i("Relay client started")
+            Timber.i("✅ Relay client started")
         } catch (e: Exception) {
-            Timber.e(e, "Failed to start relay client")
+            Timber.e(e, "❌ Failed to start relay client")
+        }
+        
+        // Start Connection Monitor
+        try {
+            connectionMonitor.startMonitoring()
+            Timber.i("✅ Connection monitor started")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Failed to start connection monitor")
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Timber.i("PaymentGatewayService started")
+        Timber.i("🔄 PaymentGatewayService started/restarted")
+        
+        // التأكد من أن جميع الخدمات تعمل
+        if (!relayClient.isStarted()) {
+            Timber.w("⚠️ RelayClient غير مبدء، إعادة تشغيل...")
+            CoroutineScope(Dispatchers.IO).launch {
+                relayClient.start()
+            }
+        }
+        
+        // START_STICKY يضمن إعادة تشغيل الخدمة إذا قتلها النظام
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        apiServer.stop()
-        cleanupManager.stopCleanup()
-        relayClient.stop()
-        Timber.i("PaymentGatewayService destroyed")
+        Timber.i("🛑 PaymentGatewayService destroying...")
+        
+        try {
+            apiServer.stop()
+            Timber.i("✅ API Server stopped")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Error stopping API Server")
+        }
+        
+        try {
+            cleanupManager.stopCleanup()
+            Timber.i("✅ Cleanup manager stopped")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Error stopping cleanup manager")
+        }
+        
+        try {
+            relayClient.stop()
+            Timber.i("✅ Relay client stopped")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Error stopping relay client")
+        }
+        
+        try {
+            connectionMonitor.stopMonitoring()
+            Timber.i("✅ Connection monitor stopped")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Error stopping connection monitor")
+        }
+        
+        Timber.i("🏁 PaymentGatewayService destroyed")
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

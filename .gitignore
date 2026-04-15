@@ -24,3 +24,5 @@ output.json
 *.hprof
 .cxx/
 *.log
+
+sync_config.jsonc

@@ -19,13 +19,17 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // قراءة التوكن من local.properties
+        // قراءة التوكن من local.properties أو متغيرات البيئة
         val localProperties = Properties()
         val localPropertiesFile = rootProject.file("local.properties")
         if (localPropertiesFile.exists()) {
             localProperties.load(FileInputStream(localPropertiesFile))
         }
-        val relayApiKey: String = localProperties.getProperty("RELAY_API_KEY") ?: "missing_api_key"
+        
+        // استخدام متغير البيئة إذا كان موجوداً، وإلا استخدم local.properties
+        val relayApiKey: String = System.getenv("RELAY_API_KEY") 
+            ?: localProperties.getProperty("RELAY_API_KEY") 
+            ?: "default_api_key_for_development"
         
         buildConfigField("String", "RELAY_API_KEY", "\"$relayApiKey\"")
     }

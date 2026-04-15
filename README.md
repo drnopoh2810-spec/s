@@ -19,13 +19,21 @@
 ✅ تشفير وأمان متقدم (HMAC)  
 ✅ يعمل 24/7 في الخلفية  
 ✅ قاعدة بيانات محلية لتخزين السجلات  
+✅ **اتصال مستقر مع الخادم (لا ينقطع)**  
+✅ **إعادة اتصال تلقائي ذكي**  
+✅ **مراقبة مستمرة لحالة الاتصال**  
+✅ **مقاوم لإعدادات توفير البطارية**  
 
 ## متطلبات التشغيل
 
 - Android 8.0+ (API Level 26+)
 - أذونات SMS (READ_SMS, RECEIVE_SMS)
-- إيقاف Battery Optimization
+- **إيقاف Battery Optimization (مهم جداً)**
+- **تفعيل Auto-Start للتطبيق**
 - اتصال إنترنت مستمر
+- **عدم إغلاق التطبيق من Recent Apps**
+
+> ⚠️ **مهم**: لضمان عدم انقطاع الاتصال، راجع [دليل استقرار الاتصال](CONNECTION_STABILITY_GUIDE.md)
 
 ## API Endpoints
 
@@ -87,13 +95,67 @@ Authorization: Bearer YOUR_API_KEY
 
 ## التثبيت والتشغيل
 
-1. افتح المشروع في Android Studio
-2. قم بتثبيت Dependencies
-3. قم ببناء التطبيق
-4. ثبّت التطبيق على هاتف Android
-5. امنح جميع الأذونات المطلوبة
-6. اضغط "Start Service"
-7. أضف التطبيق لقائمة استثناءات البطارية
+### للمطورين (Development)
+
+1. استنسخ المشروع:
+   ```bash
+   git clone https://github.com/drnopoh2810-spec/s.git
+   cd s
+   ```
+
+2. أنشئ ملف `local.properties` في جذر المشروع:
+   ```properties
+   RELAY_API_KEY=your_api_key_here
+   ```
+   أو انسخ من الملف المثال:
+   ```bash
+   cp local.properties.example local.properties
+   ```
+
+3. افتح المشروع في Android Studio
+4. قم بتثبيت Dependencies
+5. قم ببناء التطبيق
+6. ثبّت التطبيق على هاتف Android
+7. امنح جميع الأذونات المطلوبة
+8. اضغط "Start Service"
+9. أضف التطبيق لقائمة استثناءات البطارية
+
+### تحميل APK الجاهز
+
+يمكنك تحميل APK مباشرة من:
+- **Releases**: [أحدث إصدار](https://github.com/drnopoh2810-spec/s/releases/latest)
+- **Actions Artifacts**: من أي build ناجح في [Actions](https://github.com/drnopoh2810-spec/s/actions)
+
+### CI/CD
+المشروع يستخدم GitHub Actions لبناء APK تلقائياً. راجع [CI_CD_SETUP.md](CI_CD_SETUP.md) للتفاصيل.
+
+## 🔗 استقرار الاتصال
+
+### المشكلة الشائعة: انقطاع الاتصال
+إذا كان الاتصال مع `wss://nopoh22-sms-relay-server.hf.space/device` ينقطع ويحتاج إعادة فتح التطبيق:
+
+### ✅ الحل النهائي:
+1. **راجع [دليل استقرار الاتصال](CONNECTION_STABILITY_GUIDE.md)** - دليل شامل
+2. **أوقف Battery Optimization** للتطبيق
+3. **فعّل Auto-Start** (حسب نوع الهاتف)
+4. **لا تغلق التطبيق** من Recent Apps
+5. **تأكد من إشعار الخدمة** يظهر دائماً
+
+### 🔧 الإصلاحات المطبقة:
+- إعادة اتصال تلقائي ذكي (50 محاولة)
+- مراقبة مستمرة للاتصال كل 30 ثانية
+- Heartbeat محسّن كل 20 ثانية
+- مقاومة لإعدادات توفير البطارية
+- إعادة تشغيل تلقائي بعد إعادة تشغيل الهاتف
+
+### 📊 اختبار الاتصال:
+```bash
+# على Linux/Mac
+./test_connection_stability.sh
+
+# مراقبة logs يدوياً
+adb logcat | grep "RelayClient"
+```
 
 ## الأمان
 
