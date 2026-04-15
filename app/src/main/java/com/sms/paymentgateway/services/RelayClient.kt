@@ -1,4 +1,4 @@
-package com.example.smsrelay
+package com.sms.paymentgateway.services
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.util.Log
 import okhttp3.*
 import okhttp3.logging.HttpLoggingInterceptor
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class RelayClient(private val context: Context) {
@@ -21,9 +22,9 @@ class RelayClient(private val context: Context) {
     private var heartbeatRunnable: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // ⚠️ غيّر هذا الرابط إلى رابط خادم Hugging Face الصحيح
+    // ⚠️ استخدم الرابط الصحيح لخادم Hugging Face
     private val SERVER_URL = "wss://nopoh22-sms-relay-server.hf.space/device"
-    private val AUTH_TOKEN = "YOUR_API_KEY_HERE"  // غيّره إلى مفتاح API الخاص بجهازك
+    private val AUTH_TOKEN = "YOUR_API_KEY_HERE"  // استبدل بمفتاح API الفعلي
 
     private val client: OkHttpClient by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -57,7 +58,7 @@ class RelayClient(private val context: Context) {
                 isConnected = true
                 reconnectAttempts = 0
                 Log.d(TAG, "✅ WebSocket متصل بنجاح")
-                wakeLock?.let { if (!it.isHeld) it.acquire(10 * 60 * 1000L) } // 10 دقائق
+                wakeLock?.let { if (!it.isHeld) it.acquire(10 * 60 * 1000L) }
                 startManualHeartbeat()
             }
 
@@ -154,12 +155,11 @@ class RelayClient(private val context: Context) {
             when (json.optString("type")) {
                 "pong" -> Log.v(TAG, "Pong received")
                 "request" -> {
-                    // معالجة الطلبات الواردة من الخادم (مثل طلب إرسال SMS)
                     val requestId = json.getString("requestId")
                     val method = json.getString("method")
                     val path = json.getString("path")
                     val body = json.optString("body")
-                    // هنا يمكنك تنفيذ العملية المطلوبة وإرسال رد
+                    // هنا يمكنك إضافة منطق معالجة الطلب (مثل إرسال SMS)
                     val responseBody = """{"status":"ok"}"""
                     sendMessage(JSONObject().apply {
                         put("type", "response")
@@ -168,6 +168,7 @@ class RelayClient(private val context: Context) {
                         put("body", responseBody)
                     }.toString())
                 }
+                else -> Log.d(TAG, "رسالة غير معروفة: $json")
             }
         } catch (e: Exception) {
             Log.e(TAG, "خطأ في معالجة الرسالة: ${e.message}")
