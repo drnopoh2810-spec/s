@@ -30,7 +30,7 @@
         android:label="SMS Payment Gateway"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light"
-        android:usesCleartextTraffic="true">   <!-- أضيف للسماح بـ HTTP في الاختبار (اختياري) -->
+        android:usesCleartextTraffic="true">   <!-- السماح بـ HTTP في الاختبار -->
 
         <!-- Main Activity -->
         <activity
@@ -61,7 +61,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" /> <!-- لبعض الأجهزة -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" /> <!-- لدعم الإقلاع السريع -->
             </intent-filter>
         </receiver>
 
