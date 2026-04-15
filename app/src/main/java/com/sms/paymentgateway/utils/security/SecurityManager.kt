@@ -119,6 +119,21 @@ class SecurityManager @Inject constructor(
     fun setWebhookSecret(secret: String) {
         prefs.edit().putString("webhook_secret", secret).apply()
         Timber.i("Webhook secret updated")
+
+    // Relay Server Configuration
+    fun getRelayUrl(): String? {
+        return prefs.getString("relay_url", null)
+    }
+
+    fun setRelayUrl(url: String) {
+        prefs.edit().putString("relay_url", url).apply()
+        Timber.i("Relay URL updated: $url")
+    }
+
+    fun clearRelayUrl() {
+        prefs.edit().remove("relay_url").apply()
+        Timber.i("Relay URL cleared")
+    }
     }
 
     // Regenerate API Key
