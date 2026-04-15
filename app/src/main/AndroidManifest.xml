@@ -16,7 +16,7 @@
     <!-- Boot Receiver -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     
-    <!-- Battery Optimization -->
+    <!-- Battery Optimization & WakeLock -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
@@ -29,7 +29,8 @@
         android:icon="@mipmap/ic_launcher"
         android:label="SMS Payment Gateway"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light">
+        android:theme="@style/Theme.AppCompat.Light"
+        android:usesCleartextTraffic="true">   <!-- أضفت هذا لاختبار الاتصال المحلي إن أردت -->
 
         <!-- Main Activity -->
         <activity
@@ -60,10 +61,11 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 
-        <!-- Foreground Service -->
+        <!-- Foreground Service (معدل لدعم WebSocket) -->
         <service
             android:name=".services.PaymentGatewayService"
             android:enabled="true"
