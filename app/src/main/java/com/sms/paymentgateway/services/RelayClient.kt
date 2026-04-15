@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.PowerManager
 import android.util.Log
+import com.sms.paymentgateway.BuildConfig
 import okhttp3.*
 import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONObject
@@ -22,9 +23,9 @@ class RelayClient(private val context: Context) {
     private var heartbeatRunnable: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // ⚠️ استخدم الرابط الصحيح لخادم Hugging Face
+    // استخدام التوكن من BuildConfig
     private val SERVER_URL = "wss://nopoh22-sms-relay-server.hf.space/device"
-    private val AUTH_TOKEN = "YOUR_API_KEY_HERE"  // استبدل بمفتاح API الفعلي
+    private val AUTH_TOKEN = BuildConfig.RELAY_API_KEY
 
     private val client: OkHttpClient by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
