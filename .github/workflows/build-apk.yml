@@ -16,6 +16,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 🔐 إنشاء ملف local.properties من GitHub Secret
+      - name: Create local.properties from secret
+        env:
+          RELAY_API_KEY: ${{ secrets.RELAY_API_KEY }}
+        run: |
+          echo "RELAY_API_KEY=$RELAY_API_KEY" > local.properties
+          echo "✅ local.properties created with RELAY_API_KEY"
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
