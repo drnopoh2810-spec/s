@@ -7,6 +7,8 @@ import com.google.gson.GsonBuilder
 import com.sms.paymentgateway.data.AppDatabase
 import com.sms.paymentgateway.data.dao.PendingTransactionDao
 import com.sms.paymentgateway.data.dao.SmsLogDao
+import com.sms.paymentgateway.services.ConnectionMonitor
+import com.sms.paymentgateway.services.RelayClient
 import com.sms.paymentgateway.utils.matcher.TransactionMatcher
 import com.sms.paymentgateway.utils.parser.SmsParser
 import dagger.Module
@@ -78,5 +80,20 @@ object AppModule {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRelayClient(@ApplicationContext context: Context): RelayClient {
+        return RelayClient(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideConnectionMonitor(
+        @ApplicationContext context: Context,
+        relayClient: RelayClient
+    ): ConnectionMonitor {
+        return ConnectionMonitor(context, relayClient)
     }
 }

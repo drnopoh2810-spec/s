@@ -11,8 +11,7 @@ import javax.inject.Singleton
 /**
  * مراقب حالة الاتصال - يتأكد من أن RelayClient متصل دائماً
  */
-@Singleton
-class ConnectionMonitor @Inject constructor(
+class ConnectionMonitor(
     private val context: Context,
     private val relayClient: RelayClient
 ) {
