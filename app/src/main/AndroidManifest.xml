@@ -30,7 +30,7 @@
         android:label="SMS Payment Gateway"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light"
-        android:usesCleartextTraffic="true">   <!-- أضفت هذا لاختبار الاتصال المحلي إن أردت -->
+        android:usesCleartextTraffic="true">   <!-- أضيف للسماح بـ HTTP في الاختبار (اختياري) -->
 
         <!-- Main Activity -->
         <activity
@@ -61,11 +61,11 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" /> <!-- لبعض الأجهزة -->
             </intent-filter>
         </receiver>
 
-        <!-- Foreground Service (معدل لدعم WebSocket) -->
+        <!-- Foreground Service -->
         <service
             android:name=".services.PaymentGatewayService"
             android:enabled="true"
