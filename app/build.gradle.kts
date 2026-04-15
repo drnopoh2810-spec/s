@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,6 +18,16 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // قراءة التوكن من local.properties
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(FileInputStream(localPropertiesFile))
+        }
+        val relayApiKey: String = localProperties.getProperty("RELAY_API_KEY") ?: "missing_api_key"
+        
+        buildConfigField("String", "RELAY_API_KEY", "\"$relayApiKey\"")
     }
 
     buildTypes {
