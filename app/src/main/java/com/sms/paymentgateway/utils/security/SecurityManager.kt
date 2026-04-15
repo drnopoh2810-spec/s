@@ -143,4 +143,19 @@ class SecurityManager @Inject constructor(
         Timber.i("API Key regenerated")
         return newKey
     }
+
+    // Relay Server Configuration
+    fun getRelayUrl(): String? {
+        return prefs.getString("relay_url", null)
+    }
+
+    fun setRelayUrl(url: String) {
+        prefs.edit().putString("relay_url", url).apply()
+        Timber.i("Relay URL updated")
+    }
+
+    fun clearRelayUrl() {
+        prefs.edit().remove("relay_url").apply()
+        Timber.i("Relay URL cleared")
+    }
 }
