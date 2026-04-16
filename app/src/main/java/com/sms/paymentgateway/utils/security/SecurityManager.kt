@@ -144,14 +144,26 @@ class SecurityManager @Inject constructor(
         Timber.i("Direct connection URL cleared")
     }
 
-    // Relay URL (kept for compatibility)
-    fun getRelayUrl(): String? = prefs.getString("relay_url", null)
-    fun setRelayUrl(url: String) {
-        prefs.edit().putString("relay_url", url).apply()
+    // Relay URL — الرابط الافتراضي يُستخدم إذا لم يُضبط المستخدم رابطاً مخصصاً
+    companion object {
+        const val DEFAULT_RELAY_URL = "wss://nopoh22-sms-relay-server.hf.space/device"
     }
+
+    fun getRelayUrl(): String = prefs.getString("relay_url", null) ?: DEFAULT_RELAY_URL
+
+    fun setRelayUrl(url: String) {
+        if (url.isBlank() || url == DEFAULT_RELAY_URL) {
+            prefs.edit().remove("relay_url").apply()
+        } else {
+            prefs.edit().putString("relay_url", url).apply()
+        }
+    }
+
     fun clearRelayUrl() {
         prefs.edit().remove("relay_url").apply()
     }
+
+    fun isUsingDefaultRelayUrl(): Boolean = prefs.getString("relay_url", null) == null
 
     /** يبني رابط API المباشر من الـ relay أو direct URL */
     fun buildDirectApiUrl(): String? {
@@ -159,7 +171,7 @@ class SecurityManager @Inject constructor(
         if (!direct.isNullOrBlank()) return direct.removeSuffix("/connect").let {
             if (it.contains("/api/v1")) it else "$it/api/v1"
         }
-        val relay = getRelayUrl() ?: return null
+        val relay = getRelayUrl()
         return relay
             .replace("wss://", "https://")
             .replace("ws://", "http://")
