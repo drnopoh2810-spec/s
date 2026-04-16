@@ -8,6 +8,7 @@ import com.sms.paymentgateway.data.entities.PendingTransaction
 import com.sms.paymentgateway.data.entities.SmsLog
 import com.sms.paymentgateway.services.DirectConnectionManager
 import com.sms.paymentgateway.services.ConnectionMonitor
+import com.sms.paymentgateway.services.ExternalAccessManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
