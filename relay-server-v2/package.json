@@ -1,0 +1,30 @@
+{
+  "name": "sms-gateway-relay-v2",
+  "version": "2.0.0",
+  "description": "SMS Payment Gateway Relay Server v2 - Enhanced with PostgreSQL, WebSocket, and Egyptian wallet support",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-esm src/index.ts",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.40.1",
+    "express": "^5.1.0",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "pg": "^8.13.3",
+    "ws": "^8.18.2",
+    "zod": "^3.24.1",
+    "drizzle-zod": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.11.11",
+    "@types/ws": "^8.5.14",
+    "drizzle-kit": "^0.30.6",
+    "typescript": "^5.8.3"
+  }
+}
