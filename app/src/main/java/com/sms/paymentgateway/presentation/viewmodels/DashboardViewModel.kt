@@ -6,13 +6,12 @@ import com.sms.paymentgateway.data.dao.PendingTransactionDao
 import com.sms.paymentgateway.data.dao.SmsLogDao
 import com.sms.paymentgateway.data.entities.PendingTransaction
 import com.sms.paymentgateway.data.entities.SmsLog
-import com.sms.paymentgateway.services.DirectConnectionManager
-import com.sms.paymentgateway.services.NetworkDetector
+import com.sms.paymentgateway.services.RelayClient
 import com.sms.paymentgateway.services.ConnectionMonitor
-import com.sms.paymentgateway.services.ExternalAccessManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 @HiltViewModel
