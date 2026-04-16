@@ -5,375 +5,289 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import com.sms.paymentgateway.BuildConfig
+import com.sms.paymentgateway.utils.security.SecurityManager
 import okhttp3.*
 import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class RelayClient(private val context: Context) {
+@Singleton
+class RelayClient @Inject constructor(
+    private val context: Context,
+    private val securityManager: SecurityManager
+) {
     private val TAG = "RelayClient"
+
+    // حالة داخلية — أسماء مختلفة عن الدوال العامة لتجنب التعارض
+    private var _connected = false
+    private var _started   = false
+
     private var webSocket: WebSocket? = null
-    private var isConnected = false
     private var reconnectAttempts = 0
-    private val MAX_RECONNECT_ATTEMPTS = 50 // زيادة عدد المحاولات
+    private val MAX_RECONNECT_ATTEMPTS = 50
     private var isManualDisconnect = false
+
+    private val handler = Handler(Looper.getMainLooper())
     private var heartbeatRunnable: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var isStarted = false
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    private var reconnectHandler = android.os.Handler(android.os.Looper.getMainLooper())
-
-    // استخدام التوكن من BuildConfig
-    private val SERVER_URL = "wss://nopoh22-sms-relay-server.hf.space/device"
-    private val AUTH_TOKEN = BuildConfig.RELAY_API_KEY
 
     private val client: OkHttpClient by lazy {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
         OkHttpClient.Builder()
             .pingInterval(15, TimeUnit.SECONDS)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(40, TimeUnit.SECONDS)
+            .writeTimeout(40, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
     }
 
     init {
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK, 
-            "RelayClient::WakeLock"
-        )
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "RelayClient::WakeLock")
         registerNetworkCallback()
     }
 
-    /**
-     * بدء خدمة RelayClient
-     */
+    // ─── Public API ─────────────────────────────────────────────────────────
+
+    fun isConnected(): Boolean = _connected && webSocket != null
+    fun isStarted(): Boolean   = _started
+
     fun start() {
-        Log.d(TAG, "🚀 بدء RelayClient...")
-        isStarted = true
+        Log.d(TAG, "🚀 بدء RelayClient…")
+        _started = true
         isManualDisconnect = false
         reconnectAttempts = 0
         connect()
     }
 
-    /**
-     * إيقاف خدمة RelayClient
-     */
     fun stop() {
-        Log.d(TAG, "⏹️ إيقاف RelayClient...")
-        isStarted = false
+        Log.d(TAG, "⏹️ إيقاف RelayClient…")
+        _started = false
         disconnect()
         unregisterNetworkCallback()
     }
 
     fun connect() {
-        if (!isStarted) {
-            Log.w(TAG, "RelayClient غير مبدء، تجاهل محاولة الاتصال")
+        if (!_started) return
+        isManualDisconnect = false
+
+        val relayUrl = securityManager.getRelayUrl()
+        if (relayUrl.isNullOrBlank()) {
+            Log.w(TAG, "⚠️ لم يتم ضبط رابط Relay Server بعد")
             return
         }
-        
-        isManualDisconnect = false
-        Log.d(TAG, "محاولة الاتصال بالخادم... (المحاولة ${reconnectAttempts + 1})")
-        
-        // التحقق من حالة الشبكة أولاً
+
         if (!isNetworkAvailable()) {
-            Log.w(TAG, "لا توجد شبكة متاحة، سيتم إعادة المحاولة لاحقاً")
+            Log.w(TAG, "لا يوجد إنترنت، سيتم إعادة المحاولة لاحقاً")
             scheduleReconnect()
             return
         }
-        
+
+        Log.d(TAG, "محاولة الاتصال بـ $relayUrl (محاولة ${reconnectAttempts + 1})")
+
         val request = Request.Builder()
-            .url(SERVER_URL)
-            .addHeader("Authorization", "Bearer $AUTH_TOKEN")
-            .addHeader("X-Api-Key", AUTH_TOKEN)
+            .url(relayUrl)
+            .addHeader("Authorization", "Bearer ${securityManager.getApiKey()}")
+            .addHeader("X-Api-Key", securityManager.getApiKey())
             .addHeader("User-Agent", "SMS-Gateway-Android/1.0")
             .build()
-            
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                super.onOpen(webSocket, response)
-                isConnected = true
-                reconnectAttempts = 0
-                Log.d(TAG, "✅ WebSocket متصل بنجاح")
-                
-                // الحصول على WakeLock لمنع النوم
-                wakeLock?.let { 
-                    if (!it.isHeld) {
-                        it.acquire(10 * 60 * 1000L) // 10 دقائق
-                        Log.d(TAG, "🔋 WakeLock مُفعل")
-                    }
-                }
-                
-                startManualHeartbeat()
-                
-                // إرسال رسالة تسجيل الدخول
-                sendRegistrationMessage()
-            }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                super.onMessage(webSocket, text)
-                Log.d(TAG, "📨 رسالة واردة: $text")
-                handleIncomingMessage(text)
-            }
-
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                super.onClosing(webSocket, code, reason)
-                Log.w(TAG, "⚠️ WebSocket يتم إغلاقه: $code - $reason")
-                isConnected = false
-                releaseWakeLock()
-                if (isStarted && !isManualDisconnect) {
-                    scheduleReconnect()
-                }
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                super.onClosed(webSocket, code, reason)
-                Log.w(TAG, "❌ WebSocket مغلق: $code - $reason")
-                isConnected = false
-                releaseWakeLock()
-                if (isStarted && !isManualDisconnect) {
-                    scheduleReconnect()
-                }
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                super.onFailure(webSocket, t, response)
-                Log.e(TAG, "💥 فشل الاتصال: ${t.message}", t)
-                isConnected = false
-                releaseWakeLock()
-                if (isStarted && !isManualDisconnect) {
-                    scheduleReconnect()
-                }
-            }
-        })
+        webSocket = client.newWebSocket(request, createListener())
     }
 
     fun disconnect() {
         isManualDisconnect = true
-        stopManualHeartbeat()
-        
-        // إلغاء أي محاولات إعادة اتصال مجدولة
-        reconnectHandler.removeCallbacksAndMessages(null)
-        
-        webSocket?.close(1000, "Manual disconnect")
+        stopHeartbeat()
+        handler.removeCallbacksAndMessages(null)
+        webSocket?.close(1000, "إغلاق يدوي")
         webSocket = null
-        isConnected = false
+        _connected = false
         releaseWakeLock()
-        Log.d(TAG, "🔌 تم قطع الاتصال يدويًا")
+        Log.d(TAG, "🔌 تم قطع الاتصال يدوياً")
     }
 
     fun sendMessage(message: String): Boolean {
-        if (!isConnected || webSocket == null) {
+        if (!isConnected()) {
             Log.e(TAG, "لا يمكن الإرسال: غير متصل")
             return false
         }
-        webSocket?.send(message)
-        Log.d(TAG, "تم إرسال: $message")
-        return true
+        return webSocket?.send(message) == true
     }
 
-    private fun scheduleReconnect() {
-        if (isManualDisconnect || !isStarted) return
-        
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            Log.e(TAG, "🚫 وصلت محاولات إعادة الاتصال إلى الحد الأقصى ($MAX_RECONNECT_ATTEMPTS)، سيتم إعادة تعيين العداد والمحاولة مرة أخرى")
-            reconnectAttempts = 0 // إعادة تعيين العداد للمحاولة مرة أخرى
+    // ─── WebSocket Listener ──────────────────────────────────────────────────
+
+    private fun createListener() = object : WebSocketListener() {
+
+        override fun onOpen(ws: WebSocket, response: Response) {
+            _connected = true
+            reconnectAttempts = 0
+            Log.i(TAG, "✅ WebSocket متصل بنجاح")
+            wakeLock?.let { if (!it.isHeld) it.acquire(10 * 60 * 1000L) }
+            startHeartbeat()
+            sendRegistration()
         }
-        
-        // تأخير متزايد: 2^n ثانية، بحد أقصى 5 دقائق
-        val baseDelay = (1 shl reconnectAttempts.coerceAtMost(8)).coerceAtMost(300).toLong()
-        val jitter = (Math.random() * 10).toLong() // إضافة عشوائية لتجنب thundering herd
-        val delay = baseDelay + jitter
-        
-        Log.d(TAG, "⏰ سيتم إعادة الاتصال بعد $delay ثانية (المحاولة ${reconnectAttempts + 1}/$MAX_RECONNECT_ATTEMPTS)")
-        
-        reconnectHandler.postDelayed({
-            if (isStarted && !isManualDisconnect) {
-                connect()
-            }
-        }, delay * 1000)
-        
+
+        override fun onMessage(ws: WebSocket, text: String) {
+            Log.d(TAG, "📨 رسالة واردة: $text")
+            handleMessage(text)
+        }
+
+        override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+            Log.w(TAG, "⚠️ WebSocket يُغلق: $code - $reason")
+            _connected = false
+            releaseWakeLock()
+            if (_started && !isManualDisconnect) scheduleReconnect()
+        }
+
+        override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+            Log.w(TAG, "❌ WebSocket مغلق: $code - $reason")
+            _connected = false
+            releaseWakeLock()
+            if (_started && !isManualDisconnect) scheduleReconnect()
+        }
+
+        override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+            Log.e(TAG, "💥 فشل الاتصال: ${t.message}")
+            _connected = false
+            releaseWakeLock()
+            if (_started && !isManualDisconnect) scheduleReconnect()
+        }
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private fun scheduleReconnect() {
+        if (isManualDisconnect || !_started) return
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) reconnectAttempts = 0
+
+        val baseDelay = (1L shl reconnectAttempts.coerceAtMost(8)).coerceAtMost(300)
+        val jitter    = (Math.random() * 10).toLong()
+        val delay     = baseDelay + jitter
+
+        Log.d(TAG, "⏰ إعادة الاتصال بعد ${delay}s (محاولة ${reconnectAttempts + 1}/$MAX_RECONNECT_ATTEMPTS)")
+        handler.postDelayed({ if (_started && !isManualDisconnect) connect() }, delay * 1000)
         reconnectAttempts++
     }
 
-    private fun startManualHeartbeat() {
-        stopManualHeartbeat()
+    private fun startHeartbeat() {
+        stopHeartbeat()
         heartbeatRunnable = object : Runnable {
             override fun run() {
-                if (isConnected && webSocket != null && isStarted) {
-                    val heartbeat = JSONObject().apply {
-                        put("type", "ping")
-                        put("timestamp", System.currentTimeMillis())
-                    }.toString()
-                    
-                    val sent = webSocket?.send(heartbeat) ?: false
-                    if (sent) {
-                        Log.v(TAG, "💓 Heartbeat sent")
-                    } else {
-                        Log.w(TAG, "⚠️ فشل إرسال Heartbeat، قد يكون الاتصال مقطوع")
-                        isConnected = false
-                        if (isStarted && !isManualDisconnect) {
-                            scheduleReconnect()
-                        }
-                        return
-                    }
+                if (!_connected || webSocket == null || !_started) return
+                val ping = JSONObject().apply {
+                    put("type", "ping")
+                    put("timestamp", System.currentTimeMillis())
+                }.toString()
+                val sent = webSocket?.send(ping) ?: false
+                if (!sent) {
+                    Log.w(TAG, "⚠️ فشل إرسال Heartbeat")
+                    _connected = false
+                    if (_started && !isManualDisconnect) scheduleReconnect()
+                    return
                 }
-                
-                if (isConnected && isStarted) {
-                    reconnectHandler.postDelayed(this, 20000) // كل 20 ثانية
-                }
+                Log.v(TAG, "💓 Heartbeat أُرسل")
+                if (_connected && _started) handler.postDelayed(this, 20_000)
             }
         }
-        heartbeatRunnable?.let { reconnectHandler.postDelayed(it, 20000) }
+        handler.postDelayed(heartbeatRunnable!!, 20_000)
     }
 
-    private fun stopManualHeartbeat() {
-        heartbeatRunnable?.let { reconnectHandler.removeCallbacks(it) }
+    private fun stopHeartbeat() {
+        heartbeatRunnable?.let { handler.removeCallbacks(it) }
         heartbeatRunnable = null
     }
 
     private fun releaseWakeLock() {
-        wakeLock?.let { 
-            if (it.isHeld) {
-                it.release()
-                Log.d(TAG, "🔋 WakeLock مُحرر")
-            }
-        }
+        wakeLock?.let { if (it.isHeld) it.release() }
     }
 
-    private fun handleIncomingMessage(message: String) {
+    private fun handleMessage(raw: String) {
         try {
-            val json = JSONObject(message)
+            val json = JSONObject(raw)
             when (json.optString("type")) {
-                "pong" -> {
-                    Log.v(TAG, "💓 Pong received - الاتصال سليم")
-                }
+                "pong"    -> Log.v(TAG, "💓 Pong استُلم - الاتصال سليم")
+                "welcome" -> Log.d(TAG, "🎉 رسالة ترحيب من الخادم")
                 "request" -> {
                     val requestId = json.getString("requestId")
-                    val method = json.getString("method")
-                    val path = json.getString("path")
-                    val body = json.optString("body")
+                    val method    = json.getString("method")
+                    val path      = json.getString("path")
                     Log.d(TAG, "📥 طلب وارد: $method $path")
-                    
-                    // هنا يمكنك إضافة منطق معالجة الطلب (مثل إرسال SMS)
-                    val responseBody = """{"status":"ok","message":"Request processed"}"""
+                    val body = """{"status":"ok","message":"تمت المعالجة"}"""
                     sendMessage(JSONObject().apply {
                         put("type", "response")
                         put("requestId", requestId)
                         put("status", 200)
-                        put("body", responseBody)
+                        put("body", body)
                     }.toString())
-                }
-                "welcome" -> {
-                    Log.d(TAG, "🎉 رسالة ترحيب من الخادم")
                 }
                 else -> Log.d(TAG, "❓ رسالة غير معروفة: $json")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "💥 خطأ في معالجة الرسالة: ${e.message}", e)
+            Log.e(TAG, "خطأ في معالجة الرسالة: ${e.message}")
         }
     }
 
-    /**
-     * إرسال رسالة تسجيل الجهاز
-     */
-    private fun sendRegistrationMessage() {
-        val registrationMessage = JSONObject().apply {
+    private fun sendRegistration() {
+        val msg = JSONObject().apply {
             put("type", "register")
             put("deviceId", android.provider.Settings.Secure.getString(
-                context.contentResolver, 
-                android.provider.Settings.Secure.ANDROID_ID
-            ))
+                context.contentResolver, android.provider.Settings.Secure.ANDROID_ID))
             put("deviceType", "android")
             put("appVersion", "1.0")
             put("timestamp", System.currentTimeMillis())
         }.toString()
-        
-        sendMessage(registrationMessage)
-        Log.d(TAG, "📝 تم إرسال رسالة تسجيل الجهاز")
+        sendMessage(msg)
+        Log.d(TAG, "📝 تم إرسال تسجيل الجهاز")
     }
 
-    /**
-     * التحقق من توفر الشبكة
-     */
     private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork ?: return false
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    fun registerNetworkCallback() {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkRequest = NetworkRequest.Builder()
+    private fun registerNetworkCallback() {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val req = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
             .build()
-            
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                super.onAvailable(network)
-                Log.d(TAG, "🌐 الشبكة متاحة، إعادة محاولة الاتصال إن لزم")
-                if (!isConnected && !isManualDisconnect && isStarted) {
-                    // تأخير قصير للتأكد من استقرار الاتصال
-                    reconnectHandler.postDelayed({
-                        if (!isConnected && isStarted && !isManualDisconnect) {
-                            reconnectAttempts = 0 // إعادة تعيين العداد عند توفر شبكة جديدة
+                if (!_connected && !isManualDisconnect && _started) {
+                    handler.postDelayed({
+                        if (!_connected && _started && !isManualDisconnect) {
+                            reconnectAttempts = 0
                             connect()
                         }
-                    }, 2000)
+                    }, 2_000)
                 }
             }
-            
             override fun onLost(network: Network) {
-                super.onLost(network)
-                Log.w(TAG, "📵 فقدان الشبكة")
-                isConnected = false
-            }
-            
-            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                super.onCapabilitiesChanged(network, networkCapabilities)
-                val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                Log.v(TAG, "🔄 تغيير في قدرات الشبكة - Internet: $hasInternet")
+                Log.w(TAG, "📵 فُقد الاتصال بالشبكة")
+                _connected = false
             }
         }
-        
-        try {
-            connectivityManager.registerNetworkCallback(networkRequest, networkCallback!!)
-            Log.d(TAG, "📡 تم تسجيل مراقب الشبكة")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ فشل تسجيل مراقب الشبكة: ${e.message}")
-        }
+        try { cm.registerNetworkCallback(req, networkCallback!!) }
+        catch (e: Exception) { Log.e(TAG, "فشل تسجيل مراقب الشبكة: ${e.message}") }
     }
 
     private fun unregisterNetworkCallback() {
-        networkCallback?.let { callback ->
+        networkCallback?.let {
             try {
-                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                connectivityManager.unregisterNetworkCallback(callback)
-                Log.d(TAG, "📡 تم إلغاء تسجيل مراقب الشبكة")
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ فشل إلغاء تسجيل مراقب الشبكة: ${e.message}")
-            }
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                cm.unregisterNetworkCallback(it)
+            } catch (_: Exception) {}
         }
         networkCallback = null
     }
-
-    /**
-     * الحصول على حالة الاتصال
-     */
-    fun isConnected(): Boolean = this.isConnected && webSocket != null
-
-    /**
-     * الحصول على حالة الخدمة
-     */
-    fun isStarted(): Boolean = this.isStarted
 }
