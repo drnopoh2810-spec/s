@@ -1,6 +1,7 @@
 package com.sms.paymentgateway.services
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import android.util.Log
 import com.sms.paymentgateway.utils.security.SecurityManager
 import kotlinx.coroutines.*
@@ -14,7 +15,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExternalAccessManager @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val securityManager: SecurityManager,
     private val networkDetector: NetworkDetector
 ) {
