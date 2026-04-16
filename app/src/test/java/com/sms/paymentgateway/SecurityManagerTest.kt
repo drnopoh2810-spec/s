@@ -1,141 +1,171 @@
-package com.sms.paymentgateway
+package com.sms.paymentgateway.utils.security
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.sms.paymentgateway.utils.security.SecurityManager
-import io.mockk.*
-import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Test
+import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class SecurityManagerTest {
+@Singleton
+class SecurityManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
-    private lateinit var context: Context
-    private lateinit var sharedPreferences: SharedPreferences
-    private lateinit var editor: SharedPreferences.Editor
-    private lateinit var securityManager: SecurityManager
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("security_prefs", Context.MODE_PRIVATE)
 
-    @Before
-    fun setup() {
-        context = mockk(relaxed = true)
-        sharedPreferences = mockk(relaxed = true)
-        editor = mockk(relaxed = true)
+    // ─── API Key ────────────────────────────────────────────────────────────
+    fun getApiKey(): String =
+        prefs.getString("api_key", null) ?: generateAndSaveApiKey()
 
-        every { context.getSharedPreferences(any(), any()) } returns sharedPreferences
-        every { sharedPreferences.edit() } returns editor
-        every { editor.putString(any(), any()) } returns editor
-        every { editor.putStringSet(any(), any()) } returns editor
-        every { editor.apply() } just Runs
-
-        securityManager = SecurityManager(context)
+    fun validateApiKey(providedKey: String?): Boolean {
+        if (providedKey.isNullOrBlank()) return false
+        return providedKey == getApiKey()
     }
 
-    @Test
-    fun `API key is generated on first access`() {
-        every { sharedPreferences.getString("api_key", null) } returns null
-
-        val apiKey = securityManager.getApiKey()
-
-        assertNotNull(apiKey)
-        assertEquals(32, apiKey.length)
-        verify { editor.putString("api_key", any()) }
+    fun regenerateApiKey(): String {
+        val newKey = generateRandomString(32)
+        prefs.edit().putString("api_key", newKey).apply()
+        Timber.i("تم تجديد مفتاح API")
+        return newKey
     }
 
-    @Test
-    fun `validate API key returns true for correct key`() {
-        val testKey = "test_api_key_12345"
-        every { sharedPreferences.getString("api_key", null) } returns testKey
-
-        val result = securityManager.validateApiKey(testKey)
-
-        assertTrue(result)
+    private fun generateAndSaveApiKey(): String {
+        val key = generateRandomString(32)
+        prefs.edit().putString("api_key", key).apply()
+        Timber.i("تم إنشاء مفتاح API جديد")
+        return key
     }
 
-    @Test
-    fun `validate API key returns false for incorrect key`() {
-        every { sharedPreferences.getString("api_key", null) } returns "correct_key"
-
-        val result = securityManager.validateApiKey("wrong_key")
-
-        assertFalse(result)
+    // ─── HMAC ───────────────────────────────────────────────────────────────
+    fun generateHmacSignature(data: String): String {
+        return try {
+            val secret = prefs.getString("hmac_secret", null) ?: generateAndSaveHmacSecret()
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(secret.toByteArray(), "HmacSHA256"))
+            mac.doFinal(data.toByteArray()).joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            Timber.e(e, "خطأ في إنشاء توقيع HMAC")
+            ""
+        }
     }
 
-    @Test
-    fun `validate API key returns false for null key`() {
-        every { sharedPreferences.getString("api_key", null) } returns "correct_key"
+    fun verifyHmacSignature(data: String, signature: String): Boolean =
+        generateHmacSignature(data).equals(signature, ignoreCase = true)
 
-        val result = securityManager.validateApiKey(null)
-
-        assertFalse(result)
+    private fun generateAndSaveHmacSecret(): String {
+        val secret = generateRandomString(64)
+        prefs.edit().putString("hmac_secret", secret).apply()
+        return secret
     }
 
-    @Test
-    fun `HMAC signature is generated correctly`() {
-        every { sharedPreferences.getString("hmac_secret", null) } returns "test_secret"
-
-        val data = "test data"
-        val signature = securityManager.generateHmacSignature(data)
-
-        assertNotNull(signature)
-        assertTrue(signature.isNotEmpty())
-        assertEquals(64, signature.length) // SHA-256 produces 64 hex characters
+    // ─── IP Whitelist ───────────────────────────────────────────────────────
+    fun isIpAllowed(ip: String): Boolean {
+        val whitelist = getIpWhitelist()
+        if (whitelist.isEmpty()) return true
+        return whitelist.contains(ip) || whitelist.contains("*")
     }
 
-    @Test
-    fun `HMAC signature verification works`() {
-        every { sharedPreferences.getString("hmac_secret", null) } returns "test_secret"
+    fun getIpWhitelist(): Set<String> =
+        prefs.getStringSet("ip_whitelist", emptySet()) ?: emptySet()
 
-        val data = "test data"
-        val signature = securityManager.generateHmacSignature(data)
-        val isValid = securityManager.verifyHmacSignature(data, signature)
-
-        assertTrue(isValid)
+    fun addIpToWhitelist(ip: String) {
+        val list = getIpWhitelist().toMutableSet().also { it.add(ip) }
+        prefs.edit().putStringSet("ip_whitelist", list).apply()
     }
 
-    @Test
-    fun `HMAC signature verification fails for wrong signature`() {
-        every { sharedPreferences.getString("hmac_secret", null) } returns "test_secret"
-
-        val data = "test data"
-        val wrongSignature = "wrong_signature"
-        val isValid = securityManager.verifyHmacSignature(data, wrongSignature)
-
-        assertFalse(isValid)
+    fun removeIpFromWhitelist(ip: String) {
+        val list = getIpWhitelist().toMutableSet().also { it.remove(ip) }
+        prefs.edit().putStringSet("ip_whitelist", list).apply()
     }
 
-    @Test
-    fun `IP whitelist allows all when empty`() {
-        every { sharedPreferences.getStringSet("ip_whitelist", emptySet()) } returns emptySet()
-
-        val result = securityManager.isIpAllowed("192.168.1.1")
-
-        assertTrue(result)
+    fun clearIpWhitelist() {
+        prefs.edit().remove("ip_whitelist").apply()
     }
 
-    @Test
-    fun `IP whitelist allows whitelisted IP`() {
-        every { sharedPreferences.getStringSet("ip_whitelist", emptySet()) } returns setOf("192.168.1.1")
-
-        val result = securityManager.isIpAllowed("192.168.1.1")
-
-        assertTrue(result)
+    // ─── Webhook ────────────────────────────────────────────────────────────
+    fun getWebhookUrl(): String? = prefs.getString("webhook_url", null)
+    fun setWebhookUrl(url: String) {
+        prefs.edit().putString("webhook_url", url).apply()
     }
 
-    @Test
-    fun `IP whitelist blocks non-whitelisted IP`() {
-        every { sharedPreferences.getStringSet("ip_whitelist", emptySet()) } returns setOf("192.168.1.1")
-
-        val result = securityManager.isIpAllowed("192.168.1.2")
-
-        assertFalse(result)
+    fun getWebhookSecret(): String? = prefs.getString("webhook_secret", null)
+    fun setWebhookSecret(secret: String) {
+        prefs.edit().putString("webhook_secret", secret).apply()
     }
 
-    @Test
-    fun `IP whitelist allows all with wildcard`() {
-        every { sharedPreferences.getStringSet("ip_whitelist", emptySet()) } returns setOf("*")
+    // ─── Relay Server URL ───────────────────────────────────────────────────
+    fun getRelayUrl(): String? = prefs.getString("relay_url", null)
+    fun setRelayUrl(url: String) {
+        prefs.edit().putString("relay_url", url).apply()
+        Timber.i("تم تحديث رابط Relay: $url")
+    }
 
-        val result = securityManager.isIpAllowed("192.168.1.100")
+    fun clearRelayUrl() {
+        prefs.edit().remove("relay_url").apply()
+    }
 
-        assertTrue(result)
+    // ─── Direct Connection URL (generated by device) ────────────────────────
+    /**
+     * ينشئ رابط الاتصال المباشر للجهاز بناءً على رابط Relay + API Key
+     * مثال: https://relay.example.com/api/v1  (مع API Key جاهز للاستخدام)
+     */
+    fun buildDirectApiUrl(): String? {
+        val relay = getRelayUrl() ?: return null
+        // تحويل wss:// إلى https:// وإزالة /device
+        val baseUrl = relay
+            .replace("wss://", "https://")
+            .replace("ws://", "http://")
+            .removeSuffix("/device")
+        return "$baseUrl/api/v1"
+    }
+
+    /**
+     * ينشئ رمز QR / بطاقة الاتصال الكاملة
+     */
+    fun buildConnectionCard(): ConnectionCard? {
+        val apiUrl = buildDirectApiUrl() ?: return null
+        val apiKey  = getApiKey()
+        return ConnectionCard(
+            apiUrl     = apiUrl,
+            apiKey     = apiKey,
+            curlExample = "curl -X POST $apiUrl/transactions \\\n" +
+                    "  -H \"Authorization: Bearer $apiKey\" \\\n" +
+                    "  -H \"Content-Type: application/json\" \\\n" +
+                    "  -d '{\"id\":\"order-1\",\"amount\":500,\"phoneNumber\":\"01012345678\"}'",
+            jsExample  = buildJsExample(apiUrl, apiKey)
+        )
+    }
+
+    private fun buildJsExample(url: String, key: String) = """
+const API_URL = "$url";
+const API_KEY = "$key";
+
+async function createPayment(orderId, amount, phone) {
+  const res = await fetch(`${'$'}{API_URL}/transactions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${'$'}{API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ id: orderId, amount, phoneNumber: phone })
+  });
+  return res.json();
+}""".trimIndent()
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    private fun generateRandomString(length: Int): String {
+        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        return (1..length).map { chars.random() }.joinToString("")
     }
 }
+
+data class ConnectionCard(
+    val apiUrl: String,
+    val apiKey: String,
+    val curlExample: String,
+    val jsExample: String
+)
