@@ -2,6 +2,7 @@ package com.sms.paymentgateway.services
 
 import android.content.Context
 import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,7 +18,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class NetworkDetector @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "NetworkDetector"
