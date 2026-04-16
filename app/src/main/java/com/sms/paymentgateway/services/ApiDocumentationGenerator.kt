@@ -305,8 +305,8 @@ object SmsGateway {
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject {
         val reqBody = body?.toString()?.toRequestBody(JSON)
         val req = Request.Builder()
-            .url("${'$'}BASE_URL${'$'}path")
-            .header("Authorization", "Bearer ${'$'}API_KEY")
+            .url("${'$'}{BASE_URL}${'$'}{path}")
+            .header("Authorization", "Bearer ${'$'}{API_KEY}")
             .method(method, reqBody)
             .build()
         client.newCall(req).execute().use { return JSONObject(it.body!!.string()) }
@@ -321,7 +321,7 @@ object SmsGateway {
             put("expiresInMinutes", 30)
         })
 
-    fun getTransaction(id: String) = request("GET", "/transactions/${'$'}id")
+    fun getTransaction(id: String) = request("GET", "/transactions/${'$'}{id}")
 
     fun waitForPayment(id: String, timeoutMs: Long = 300_000): JSONObject? {
         val end = System.currentTimeMillis() + timeoutMs
@@ -353,9 +353,9 @@ object SmsGateway {
 // ─── Usage ───────────────────────────────────────────────────
 fun main() {
     SmsGateway.createTransaction("order-001", 500.0, "01012345678")
-    SmsGateway.connectWebSocket { println("Confirmed: ${'$'}it") }
+    SmsGateway.connectWebSocket { println("Confirmed: ${'$'}{it}") }
     val result = SmsGateway.waitForPayment("order-001")
-    println("Result: ${'$'}result")
+    println("Result: ${'$'}{result}")
 }
 """.trimIndent()
 
@@ -437,20 +437,20 @@ class SmsGateway {
   static const baseUrl = '$url';
   static const apiKey  = '$key';
   static final _headers = {
-    'Authorization': 'Bearer ${'$'}apiKey',
+    'Authorization': 'Bearer ${'$'}{apiKey}',
     'Content-Type': 'application/json',
   };
 
   // 1) Health Check
   static Future<Map> healthCheck() async {
-    final res = await http.get(Uri.parse('${'$'}baseUrl/health'), headers: _headers);
+    final res = await http.get(Uri.parse('${'$'}{baseUrl}/health'), headers: _headers);
     return jsonDecode(res.body);
   }
 
   // 2) Create Transaction
   static Future<Map> createTransaction(String id, double amount, String phone) async {
     final res = await http.post(
-      Uri.parse('${'$'}baseUrl/transactions'),
+      Uri.parse('${'$'}{baseUrl}/transactions'),
       headers: _headers,
       body: jsonEncode({'id': id, 'amount': amount, 'phoneNumber': phone,
                         'walletType': 'VODAFONE_CASH', 'expiresInMinutes': 30}),
@@ -460,7 +460,7 @@ class SmsGateway {
 
   // 3) Get Transaction
   static Future<Map> getTransaction(String id) async {
-    final res = await http.get(Uri.parse('${'$'}baseUrl/transactions/${'$'}id'), headers: _headers);
+    final res = await http.get(Uri.parse('${'$'}{baseUrl}/transactions/${'$'}{id}'), headers: _headers);
     return jsonDecode(res.body);
   }
 
@@ -495,7 +495,7 @@ void main() async {
     if (data['event'] == 'PAYMENT_CONFIRMED') print('Confirmed: ${'$'}{data['data']}');
   });
   final result = await SmsGateway.waitForPayment('order-001');
-  print('Result: ${'$'}result');
+  print('Result: ${'$'}{result}');
 }
 """.trimIndent()
 
