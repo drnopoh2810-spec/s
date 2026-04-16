@@ -527,10 +527,10 @@ fun ConnectionCardDialog(
 
                 when (selectedTab) {
                     0 -> {
-                        CodeBlock(text = card.curlExample, onCopy = { onCopy(card.curlExample, "مثال cURL") })
+                        CodeBlock(text = buildCurlExample(card.apiUrl, card.apiKey), onCopy = { onCopy(buildCurlExample(card.apiUrl, card.apiKey), "مثال cURL") })
                     }
                     1 -> {
-                        CodeBlock(text = card.jsExample, onCopy = { onCopy(card.jsExample, "مثال JavaScript") })
+                        CodeBlock(text = buildJsExample(card.apiUrl, card.apiKey), onCopy = { onCopy(buildJsExample(card.apiUrl, card.apiKey), "مثال JavaScript") })
                     }
                     2 -> {
                         val phpExample = buildPhpExample(card.apiUrl, card.apiKey)
@@ -571,7 +571,26 @@ private fun CodeBlock(text: String, onCopy: () -> Unit) {
     }
 }
 
-private fun buildPhpExample(url: String, key: String) = """
+private fun buildCurlExample(url: String, key: String) = """
+  curl -X POST "${url}/transactions" \
+    -H "Authorization: Bearer ${key}" \
+    -H "Content-Type: application/json" \
+    -d '{"id":"order-001","amount":500,"phoneNumber":"01012345678"}'
+  """.trimIndent()
+
+  private fun buildJsExample(url: String, key: String) = """
+  const res = await fetch('${url}/transactions', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ${key}',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({id:'order-001',amount:500,phoneNumber:'01012345678'})
+  });
+  const data = await res.json();
+  """.trimIndent()
+
+  private fun buildPhpExample(url: String, key: String) = """
 <?php
 \$apiUrl = "$url";
 \$apiKey = "$key";
