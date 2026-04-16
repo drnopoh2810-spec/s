@@ -24,6 +24,10 @@ import com.sms.paymentgateway.services.PaymentGatewayService
 import com.sms.paymentgateway.utils.security.SecurityManager
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -226,9 +230,7 @@ fun HomeScreen(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    androidx.compose.foundation.horizontalScroll(
-                        androidx.compose.foundation.rememberScrollState()
-                    ) {
+                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                         Text(
                             apiKey,
                             style = MaterialTheme.typography.bodyMedium,
