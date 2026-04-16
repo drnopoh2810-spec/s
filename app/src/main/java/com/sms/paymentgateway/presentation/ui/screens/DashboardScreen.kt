@@ -7,23 +7,25 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.sms.paymentgateway.data.entities.PendingTransaction
+import com.sms.paymentgateway.data.entities.SmsLog
+import com.sms.paymentgateway.data.entities.TransactionStatus
 import com.sms.paymentgateway.presentation.viewmodels.DashboardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(
-    viewModel: DashboardViewModel = hiltViewModel()
-) {
-    val stats by viewModel.stats.collectAsState()
+fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+    val stats               by viewModel.stats.collectAsState()
     val pendingTransactions by viewModel.pendingTransactions.collectAsState()
-    val recentSms by viewModel.recentSmsLogs.collectAsState()
+    val recentSms           by viewModel.recentSmsLogs.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dashboard") },
+                title = { Text("لوحة التحكم") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
@@ -35,234 +37,135 @@ fun DashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Stats Cards
-            item {
-                Text(
-                    text = "Statistics",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-            }
+            // إحصائيات
+            item { Text("📊 الإحصائيات", style = MaterialTheme.typography.headlineSmall) }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    StatCard(
-                        title = "Pending",
-                        value = stats.totalPending.toString(),
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatCard(
-                        title = "Matched",
-                        value = stats.totalMatched.toString(),
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(8.dp)) {
+                    StatCard("قيد الانتظار", stats.totalPending.toString(), Modifier.weight(1f))
+                    StatCard("تم المطابقة", stats.totalMatched.toString(), Modifier.weight(1f))
                 }
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    StatCard(
-                        title = "SMS Received",
-                        value = stats.totalSmsReceived.toString(),
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatCard(
-                        title = "Success Rate",
-                        value = "${stats.successRate}%",
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(8.dp)) {
+                    StatCard("رسائل مستلمة", stats.totalSmsReceived.toString(), Modifier.weight(1f))
+                    StatCard("نسبة النجاح", "${stats.successRate}%", Modifier.weight(1f))
                 }
             }
 
-            // Pending Transactions
+            // معاملات قيد الانتظار
             item {
                 Text(
-                    text = "Pending Transactions",
+                    "⏳ المعاملات المعلّقة",
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(top = 16.dp)
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
             if (pendingTransactions.isEmpty()) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("No pending transactions")
-                        }
-                    }
+                    EmptyCard("لا توجد معاملات معلّقة حالياً")
                 }
             } else {
-                items(pendingTransactions) { transaction ->
-                    TransactionCard(transaction)
-                }
+                items(pendingTransactions) { tx -> TransactionCard(tx) }
             }
 
-            // Recent SMS
+            // آخر الرسائل
             item {
                 Text(
-                    text = "Recent SMS",
+                    "📩 آخر الرسائل المستلمة",
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(top = 16.dp)
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
             if (recentSms.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("No SMS received yet")
-                        }
-                    }
-                }
+                item { EmptyCard("لم يتم استلام رسائل SMS بعد") }
             } else {
-                items(recentSms) { sms ->
-                    SmsLogCard(sms)
-                }
+                items(recentSms) { sms -> SmsLogCard(sms) }
             }
         }
     }
 }
 
 @Composable
-fun StatCard(
-    title: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-    ) {
+fun StatCard(title: String, value: String, modifier: Modifier = Modifier) {
+    Card(modifier = modifier) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            Modifier.fillMaxWidth().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = value,
+                value,
                 style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
             )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(title, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
 @Composable
-fun TransactionCard(transaction: com.sms.paymentgateway.data.entities.PendingTransaction) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = transaction.id,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = transaction.status.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = when (transaction.status) {
-                        com.sms.paymentgateway.data.entities.TransactionStatus.PENDING -> MaterialTheme.colorScheme.primary
-                        com.sms.paymentgateway.data.entities.TransactionStatus.MATCHED -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.error
+fun EmptyCard(message: String) {
+    Card(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
+            Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun TransactionCard(tx: PendingTransaction) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                Text(tx.id, style = MaterialTheme.typography.titleMedium)
+                Badge(
+                    containerColor = when (tx.status) {
+                        TransactionStatus.PENDING -> MaterialTheme.colorScheme.primaryContainer
+                        TransactionStatus.MATCHED -> MaterialTheme.colorScheme.tertiaryContainer
+                        else                       -> MaterialTheme.colorScheme.errorContainer
                     }
-                )
+                ) {
+                    Text(when (tx.status) {
+                        TransactionStatus.PENDING   -> "معلّق"
+                        TransactionStatus.MATCHED   -> "تم ✓"
+                        TransactionStatus.EXPIRED   -> "منتهي"
+                        TransactionStatus.CANCELLED -> "ملغي"
+                    })
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Amount: ${transaction.amount} EGP",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Text(
-                text = "Phone: ${transaction.phoneNumber}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            transaction.confidence?.let {
-                Text(
-                    text = "Confidence: ${(it * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall
-                )
+            Spacer(Modifier.height(6.dp))
+            Text("المبلغ: ${tx.amount} جنيه", style = MaterialTheme.typography.bodyLarge)
+            Text("الهاتف: ${tx.phoneNumber}", style = MaterialTheme.typography.bodyMedium)
+            tx.confidence?.let {
+                Text("الثقة: ${(it * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
             }
         }
     }
 }
 
 @Composable
-fun SmsLogCard(sms: com.sms.paymentgateway.data.entities.SmsLog) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+fun SmsLogCard(sms: SmsLog) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                Text(sms.sender, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = sms.sender,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = if (sms.parsed) "✓ Parsed" else "✗ Failed",
+                    if (sms.parsed) "✓ تم التحليل" else "✗ فشل",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (sms.parsed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
+                    color = if (sms.parsed) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.error
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            sms.amount?.let {
-                Text(
-                    text = "Amount: $it EGP",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            sms.transactionId?.let {
-                Text(
-                    text = "TX ID: $it",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            if (sms.matched) {
-                Text(
-                    text = "✓ Matched",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-            }
+            Spacer(Modifier.height(4.dp))
+            sms.amount?.let { Text("المبلغ: $it جنيه") }
+            sms.transactionId?.let { Text("رقم العملية: $it") }
+            if (sms.matched) Text("✓ تمت المطابقة", color = MaterialTheme.colorScheme.tertiary)
         }
     }
 }
