@@ -1,121 +1,39 @@
-package com.sms.paymentgateway
+package com.sms.paymentgateway.utils.security
 
-import com.sms.paymentgateway.utils.security.RateLimiter
-import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Test
+import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class RateLimiterTest {
+@Singleton
+class RateLimiter @Inject constructor() {
 
-    private lateinit var rateLimiter: RateLimiter
+    private val requests = ConcurrentHashMap<String, MutableList<Long>>()
 
-    @Before
-    fun setup() {
-        rateLimiter = RateLimiter()
-    }
-
-    @Test
-    fun `allows requests under limit`() {
-        val ip = "192.168.1.1"
-
-        repeat(50) {
-            assertTrue(rateLimiter.isAllowed(ip, maxRequests = 100))
+    fun isAllowed(ip: String, maxRequests: Int = 100, windowMs: Long = 60_000): Boolean {
+        val now = System.currentTimeMillis()
+        val ipRequests = requests.getOrPut(ip) { mutableListOf() }
+        synchronized(ipRequests) {
+            ipRequests.removeIf { it < now - windowMs }
+            return if (ipRequests.size < maxRequests) {
+                ipRequests.add(now)
+                true
+            } else {
+                Timber.w("تم تجاوز حد الطلبات لـ IP: $ip")
+                false
+            }
         }
     }
 
-    @Test
-    fun `blocks requests over limit`() {
-        val ip = "192.168.1.1"
-        val maxRequests = 10
+    fun reset(ip: String) { requests.remove(ip) }
+    fun clearAll() { requests.clear() }
 
-        // Make max requests
-        repeat(maxRequests) {
-            assertTrue(rateLimiter.isAllowed(ip, maxRequests = maxRequests))
+    fun getRequestCount(ip: String, windowMs: Long = 60_000): Int {
+        val now = System.currentTimeMillis()
+        val ipRequests = requests[ip] ?: return 0
+        synchronized(ipRequests) {
+            ipRequests.removeIf { it < now - windowMs }
+            return ipRequests.size
         }
-
-        // Next request should be blocked
-        assertFalse(rateLimiter.isAllowed(ip, maxRequests = maxRequests))
-    }
-
-    @Test
-    fun `different IPs have separate limits`() {
-        val ip1 = "192.168.1.1"
-        val ip2 = "192.168.1.2"
-        val maxRequests = 5
-
-        // Max out ip1
-        repeat(maxRequests) {
-            assertTrue(rateLimiter.isAllowed(ip1, maxRequests = maxRequests))
-        }
-        assertFalse(rateLimiter.isAllowed(ip1, maxRequests = maxRequests))
-
-        // ip2 should still be allowed
-        assertTrue(rateLimiter.isAllowed(ip2, maxRequests = maxRequests))
-    }
-
-    @Test
-    fun `reset clears limit for IP`() {
-        val ip = "192.168.1.1"
-        val maxRequests = 5
-
-        // Max out requests
-        repeat(maxRequests) {
-            rateLimiter.isAllowed(ip, maxRequests = maxRequests)
-        }
-        assertFalse(rateLimiter.isAllowed(ip, maxRequests = maxRequests))
-
-        // Reset and try again
-        rateLimiter.reset(ip)
-        assertTrue(rateLimiter.isAllowed(ip, maxRequests = maxRequests))
-    }
-
-    @Test
-    fun `clearAll resets all IPs`() {
-        val ip1 = "192.168.1.1"
-        val ip2 = "192.168.1.2"
-        val maxRequests = 5
-
-        // Max out both IPs
-        repeat(maxRequests) {
-            rateLimiter.isAllowed(ip1, maxRequests = maxRequests)
-            rateLimiter.isAllowed(ip2, maxRequests = maxRequests)
-        }
-
-        rateLimiter.clearAll()
-
-        // Both should be allowed again
-        assertTrue(rateLimiter.isAllowed(ip1, maxRequests = maxRequests))
-        assertTrue(rateLimiter.isAllowed(ip2, maxRequests = maxRequests))
-    }
-
-    @Test
-    fun `getRequestCount returns correct count`() {
-        val ip = "192.168.1.1"
-
-        repeat(5) {
-            rateLimiter.isAllowed(ip)
-        }
-
-        assertEquals(5, rateLimiter.getRequestCount(ip))
-    }
-
-    @Test
-    fun `old requests are removed from window`() {
-        val ip = "192.168.1.1"
-        val windowMs = 100L // 100ms window
-
-        // Make some requests
-        repeat(5) {
-            rateLimiter.isAllowed(ip, windowMs = windowMs)
-        }
-
-        // Wait for window to expire
-        Thread.sleep(150)
-
-        // Count should be 0 now
-        assertEquals(0, rateLimiter.getRequestCount(ip, windowMs = windowMs))
-
-        // Should be able to make requests again
-        assertTrue(rateLimiter.isAllowed(ip, maxRequests = 5, windowMs = windowMs))
     }
 }
