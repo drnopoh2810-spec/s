@@ -296,6 +296,7 @@ echo "Confirmed: " . json_encode(${d}confirmed) . PHP_EOL;
     // ─── Kotlin ──────────────────────────────────────────────────────────────
     private fun buildKotlin(url: String, key: String): String {
         val d = "$" // dollar sign for Kotlin string templates
+        val tq = "\"\"\"" // triple-quote
         return """
 // ============================================================
 //  SMS Payment Gateway — API Documentation (Kotlin)
@@ -350,7 +351,7 @@ object SmsGateway {
         val req = Request.Builder().url(wsUrl).build()
         return client.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, r: Response) =
-                ws.send("""{"type":"subscribe"}""")
+                ws.send("{\"type\":\"subscribe\"}")
             override fun onMessage(ws: WebSocket, text: String) {
                 val msg = JSONObject(text)
                 if (msg.optString("event") == "PAYMENT_CONFIRMED")
