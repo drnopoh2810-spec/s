@@ -400,7 +400,7 @@ fun SimpleConnectionStatusCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                </Column>
+                }
                 
                 Button(
                     onClick = onRestartConnection,
