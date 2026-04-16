@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -443,7 +444,7 @@ fun EnhancedConnectionStatusCard(
 @Composable
 fun NetworkInfoSection(
     networkInfo: NetworkDetector.NetworkInfo,
-    clipboardManager: LocalClipboardManager
+    clipboardManager: androidx.compose.ui.platform.ClipboardManager
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -491,7 +492,7 @@ fun NetworkInfoSection(
 @Composable
 fun ConnectionUrlItem(
     url: NetworkDetector.ConnectionUrl,
-    clipboardManager: LocalClipboardManager
+    clipboardManager: androidx.compose.ui.platform.ClipboardManager
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
