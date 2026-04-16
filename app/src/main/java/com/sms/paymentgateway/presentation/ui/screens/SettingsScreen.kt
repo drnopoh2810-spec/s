@@ -590,20 +590,21 @@ private fun buildCurlExample(url: String, key: String) = """
   const data = await res.json();
   """.trimIndent()
 
-  private fun buildPhpExample(url: String, key: String) = """
-<?php
-\$apiUrl = "$url";
-\$apiKey = "$key";
-\$data   = ['id'=>'order-1','amount'=>500,'phoneNumber'=>'01012345678'];
-
-\$ctx = stream_context_create(['http'=>[
-  'method'  => 'POST',
-  'header'  => "Authorization: Bearer \$apiKey\r\nContent-Type: application/json",
-  'content' => json_encode(\$data)
-]]);
-\$response = json_decode(file_get_contents("\$apiUrl/transactions", false, \$ctx), true);
-echo "رقم المعاملة: " . \$response['transaction']['id'];
-?>""".trimIndent()
+  private fun buildPhpExample(url: String, key: String): String {
+      val s = "${'$'}"
+      return ("<?php\n" +
+          s + "apiUrl = \"" + url + "\";\n" +
+          s + "apiKey = \"" + key + "\";\n" +
+          s + "data   = ['id'=>'order-1','amount'=>500,'phoneNumber'=>'01012345678'];\n\n" +
+          s + "ctx = stream_context_create(['http'=>[\n" +
+          "  'method'  => 'POST',\n" +
+          "  'header'  => \"Authorization: Bearer \" . " + s + "apiKey . \"\\r\\nContent-Type: application/json\",\n" +
+          "  'content' => json_encode(" + s + "data)\n" +
+          "]]);\n" +
+          s + "response = json_decode(file_get_contents(" + s + "apiUrl . '/transactions', false, " + s + "ctx), true);\n" +
+          "echo \"رقم المعاملة: \" . " + s + "response['transaction']['id'];\n" +
+          "?>")
+  }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
