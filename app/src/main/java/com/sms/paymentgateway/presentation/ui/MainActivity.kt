@@ -27,23 +27,17 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject
-    lateinit var securityManager: SecurityManager
+    @Inject lateinit var securityManager: SecurityManager
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            startService()
-        } else {
-            Timber.w("Some permissions were denied")
-        }
+    ) { perms ->
+        if (perms.values.all { it }) startGatewayService()
+        else Timber.w("بعض الأذونات مرفوضة")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
         setContent {
             MaterialTheme {
                 Surface(
@@ -51,9 +45,9 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     AppNavigation(
-                        apiKey = securityManager.getApiKey(),
-                        onStartService = { checkPermissionsAndStart() },
-                        onRequestBatteryOptimization = { requestBatteryOptimization() }
+                        apiKey          = securityManager.getApiKey(),
+                        onStartService  = { checkPermissionsAndStart() },
+                        onBatterySettings = { openBatterySettings() }
                     )
                 }
             }
@@ -61,42 +55,31 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissionsAndStart() {
-        val permissions = mutableListOf(
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.READ_SMS,
-            Manifest.permission.RECEIVE_BOOT_COMPLETED
-        )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        val required = buildList {
+            add(Manifest.permission.RECEIVE_SMS)
+            add(Manifest.permission.READ_SMS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                add(Manifest.permission.POST_NOTIFICATIONS)
         }
-
-        val notGranted = permissions.filter {
+        val denied = required.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
-        if (notGranted.isEmpty()) {
-            startService()
-        } else {
-            permissionLauncher.launch(notGranted.toTypedArray())
-        }
+        if (denied.isEmpty()) startGatewayService()
+        else permissionLauncher.launch(denied.toTypedArray())
     }
 
-    private fun startService() {
+    private fun startGatewayService() {
         val intent = Intent(this, PaymentGatewayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             startForegroundService(intent)
-        } else {
+        else
             startService(intent)
-        }
-        Timber.i("Service started")
+        Timber.i("تم تشغيل الخدمة")
     }
 
-    private fun requestBatteryOptimization() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-            startActivity(intent)
-        }
+    private fun openBatterySettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
     }
 }
 
@@ -104,7 +87,7 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation(
     apiKey: String,
     onStartService: () -> Unit,
-    onRequestBatteryOptimization: () -> Unit
+    onBatterySettings: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -112,29 +95,29 @@ fun AppNavigation(
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Home, "Home") },
-                    label = { Text("Home") },
+                    icon = { Icon(Icons.Default.Home, "الرئيسية") },
+                    label = { Text("الرئيسية") },
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 }
+                    onClick  = { selectedTab = 0 }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.List, "Dashboard") },
-                    label = { Text("Dashboard") },
+                    icon = { Icon(Icons.Default.List, "لوحة التحكم") },
+                    label = { Text("لوحة التحكم") },
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 }
+                    onClick  = { selectedTab = 1 }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Settings, "Settings") },
-                    label = { Text("Settings") },
+                    icon = { Icon(Icons.Default.Settings, "الإعدادات") },
+                    label = { Text("الإعدادات") },
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 }
+                    onClick  = { selectedTab = 2 }
                 )
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
+        Box(Modifier.padding(padding)) {
             when (selectedTab) {
-                0 -> MainScreen(apiKey, onStartService, onRequestBatteryOptimization)
+                0 -> HomeScreen(apiKey, onStartService, onBatterySettings)
                 1 -> com.sms.paymentgateway.presentation.ui.screens.DashboardScreen()
                 2 -> com.sms.paymentgateway.presentation.ui.screens.SettingsScreen()
             }
@@ -143,10 +126,10 @@ fun AppNavigation(
 }
 
 @Composable
-fun MainScreen(
+fun HomeScreen(
     apiKey: String,
     onStartService: () -> Unit,
-    onRequestBatteryOptimization: () -> Unit
+    onBatterySettings: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -155,54 +138,59 @@ fun MainScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Text("📱 بوابة دفع SMS", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = "📱 SMS Payment Gateway",
-            style = MaterialTheme.typography.headlineMedium
+            "تأكيد المدفوعات عبر رسائل المحافظ الإلكترونية",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
+
+        Spacer(Modifier.height(32.dp))
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("🔑 مفتاح API:", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "API Key:",
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = apiKey,
-                    style = MaterialTheme.typography.bodyMedium
+                    apiKey,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Button(
-            onClick = onStartService,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Start Service")
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(onClick = onStartService, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.PlayArrow, null)
+            Spacer(Modifier.width(8.dp))
+            Text("تشغيل الخدمة")
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        OutlinedButton(
-            onClick = onRequestBatteryOptimization,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Battery Optimization Settings")
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(onClick = onBatterySettings, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Settings, null)
+            Spacer(Modifier.width(8.dp))
+            Text("إعدادات استهلاك البطارية")
         }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Text(
-            text = "API Server: http://localhost:8080",
-            style = MaterialTheme.typography.bodySmall
-        )
+
+        Spacer(Modifier.height(32.dp))
+
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("📝 التعليمات:", style = MaterialTheme.typography.labelLarge)
+                Text("١. اضغط «تشغيل الخدمة» ومنح الأذونات")
+                Text("٢. اذهب إلى «الإعدادات» وأضف رابط خادم الوسيط")
+                Text("٣. سيظهر رابط API جاهز للاستخدام في موقعك")
+                Text("٤. أوقف تحسين البطارية للتطبيق للعمل المستمر")
+            }
+        }
     }
 }
