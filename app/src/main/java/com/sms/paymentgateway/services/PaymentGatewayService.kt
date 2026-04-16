@@ -18,112 +18,55 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class PaymentGatewayService : Service() {
 
-    @Inject
-    lateinit var apiServer: ApiServer
+    @Inject lateinit var apiServer: ApiServer
+    @Inject lateinit var cleanupManager: CleanupManager
+    @Inject lateinit var relayClient: RelayClient
+    @Inject lateinit var connectionMonitor: ConnectionMonitor
 
-    @Inject
-    lateinit var cleanupManager: CleanupManager
-
-    @Inject
-    lateinit var relayClient: RelayClient
-    
-    @Inject
-    lateinit var connectionMonitor: ConnectionMonitor
-
-    private val CHANNEL_ID = "payment_gateway_channel"
+    private val CHANNEL_ID      = "payment_gateway_channel"
     private val NOTIFICATION_ID = 1
 
     override fun onCreate() {
         super.onCreate()
-        Timber.i("🚀 PaymentGatewayService created")
+        Timber.i("🚀 بدء خدمة بوابة الدفع")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
-        
-        // Start API Server
-        try {
-            apiServer.start()
-            Timber.i("✅ API Server started on port 8080")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to start API Server")
+
+        runCatching { apiServer.start()
+            Timber.i("✅ خادم API يعمل على المنفذ 8080") }
+            .onFailure { Timber.e(it, "❌ فشل تشغيل خادم API") }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { cleanupManager.startPeriodicCleanup() }
+                .onFailure { Timber.e(it, "❌ فشل تشغيل مدير التنظيف") }
         }
 
-        // Start periodic cleanup
-        try {
-            CoroutineScope(Dispatchers.IO).launch {
-                cleanupManager.startPeriodicCleanup(intervalHours = 1)
-            }
-            Timber.i("✅ Cleanup manager started")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to start cleanup manager")
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { relayClient.start()
+                Timber.i("✅ عميل Relay يعمل") }
+                .onFailure { Timber.e(it, "❌ فشل تشغيل عميل Relay") }
         }
 
-        // Start Relay Client (connects to cloud relay server)
-        try {
-            CoroutineScope(Dispatchers.IO).launch {
-                relayClient.start()
-            }
-            Timber.i("✅ Relay client started")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to start relay client")
-        }
-        
-        // Start Connection Monitor
-        try {
-            connectionMonitor.startMonitoring()
-            Timber.i("✅ Connection monitor started")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to start connection monitor")
-        }
+        runCatching { connectionMonitor.startMonitoring()
+            Timber.i("✅ مراقبة الاتصال نشطة") }
+            .onFailure { Timber.e(it, "❌ فشل تشغيل مراقبة الاتصال") }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Timber.i("🔄 PaymentGatewayService started/restarted")
-        
-        // التأكد من أن جميع الخدمات تعمل
+        Timber.i("🔄 إعادة تشغيل الخدمة")
         if (!relayClient.isStarted()) {
-            Timber.w("⚠️ RelayClient غير مبدء، إعادة تشغيل...")
-            CoroutineScope(Dispatchers.IO).launch {
-                relayClient.start()
-            }
+            CoroutineScope(Dispatchers.IO).launch { relayClient.start() }
         }
-        
-        // START_STICKY يضمن إعادة تشغيل الخدمة إذا قتلها النظام
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Timber.i("🛑 PaymentGatewayService destroying...")
-        
-        try {
-            apiServer.stop()
-            Timber.i("✅ API Server stopped")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Error stopping API Server")
-        }
-        
-        try {
-            cleanupManager.stopCleanup()
-            Timber.i("✅ Cleanup manager stopped")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Error stopping cleanup manager")
-        }
-        
-        try {
-            relayClient.stop()
-            Timber.i("✅ Relay client stopped")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Error stopping relay client")
-        }
-        
-        try {
-            connectionMonitor.stopMonitoring()
-            Timber.i("✅ Connection monitor stopped")
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Error stopping connection monitor")
-        }
-        
-        Timber.i("🏁 PaymentGatewayService destroyed")
+        Timber.i("🛑 إيقاف خدمة بوابة الدفع")
+        runCatching { apiServer.stop() }
+        runCatching { cleanupManager.stopCleanup() }
+        runCatching { relayClient.stop() }
+        runCatching { connectionMonitor.stopMonitoring() }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -131,25 +74,20 @@ class PaymentGatewayService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                "SMS Payment Gateway",
+                CHANNEL_ID, "بوابة دفع SMS",
                 NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Keeps the payment gateway service running"
-            }
-            
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+            ).apply { description = "تشغيل خدمة بوابة الدفع في الخلفية" }
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
     }
 
-    private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("SMS Payment Gateway")
-            .setContentText("Service is running and monitoring SMS")
+    private fun createNotification(): Notification =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("بوابة دفع SMS")
+            .setContentText("الخدمة تعمل وتراقب الرسائل")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
-    }
 }
