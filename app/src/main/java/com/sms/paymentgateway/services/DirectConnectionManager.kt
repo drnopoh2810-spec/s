@@ -259,18 +259,18 @@ class DirectConnectionManager @Inject constructor(
      * بدء خادم HTTP
      */
     private fun startHttpServer() {
-        // استخدام ApiServer الموجود مع إضافة endpoint للاتصال المباشر
-        httpServer = ApiServer(
-            context = context,
-            securityManager = securityManager,
-            webSocketHandler = webSocketHandler
-        ).apply {
-            // إضافة معالج للاتصال المباشر
-            addDirectConnectionHandler { request ->
-                handleDirectConnection(request)
-            }
-        }
-    }
+          // استخدام NanoHTTPD مباشرة للاتصال المباشر
+          httpServer = object : fi.iki.elonen.NanoHTTPD(DEFAULT_PORT) {
+              override fun serve(session: IHTTPSession): Response {
+                  return newFixedLengthResponse(
+                      Response.Status.OK,
+                      "application/json",
+                      handleDirectConnection(session)
+                  )
+              }
+          }.also { it.start() }
+      }
+
 
     /**
      * معالجة طلبات الاتصال المباشر
