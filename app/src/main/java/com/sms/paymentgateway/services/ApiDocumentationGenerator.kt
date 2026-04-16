@@ -42,11 +42,12 @@ class ApiDocumentationGenerator @Inject constructor(
         }
     }
 
-    /** يحفظ الملف في Downloads ويعيد مساره */
+    /** يحفظ الملف في Downloads/SMS-Gateway/ ويعيد مساره */
     fun saveToDownloads(lang: DocLanguage): File {
         val content  = generate(lang)
         val fileName = "sms_gateway_api.${lang.ext}"
-        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val dir = File(baseDir, "SMS-Gateway")
         dir.mkdirs()
         val file = File(dir, fileName)
         file.writeText(content, Charsets.UTF_8)
