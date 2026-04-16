@@ -1,6 +1,7 @@
 package com.sms.paymentgateway.services
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.google.gson.Gson
 import com.sms.paymentgateway.data.dao.PendingTransactionDao
 import com.sms.paymentgateway.data.dao.SmsLogDao
@@ -22,7 +23,7 @@ import javax.inject.Singleton
 
 @Singleton
 class ApiServer @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val pendingTransactionDao: PendingTransactionDao,
     private val smsLogDao: SmsLogDao,
     private val securityManager: SecurityManager,
