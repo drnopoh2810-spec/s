@@ -95,8 +95,8 @@ class RelayClient @Inject constructor(
         if (isManualDisconnect.get()) return
 
         val relayUrl = securityManager.getRelayUrl()
-        if (relayUrl.isNullOrBlank()) {
-            Log.w(TAG, "⚠️ لم يتم ضبط رابط Relay Server بعد")
+        if (relayUrl.isBlank()) {
+            Log.w(TAG, "⚠️ رابط Relay Server فارغ")
             return
         }
 
