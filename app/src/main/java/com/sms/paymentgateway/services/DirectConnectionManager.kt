@@ -1,6 +1,7 @@
 package com.sms.paymentgateway.services
 
 import android.content.Context
+import fi.iki.elonen.NanoHTTPD
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -66,7 +67,7 @@ class DirectConnectionManager @Inject constructor(
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     
     // خادم HTTP المدمج
-    private var httpServer: ApiServer? = null
+    private var httpServer: fi.iki.elonen.NanoHTTPD? = null
     
     // عملاء WebSocket المتصلين
     private val activeConnections = mutableMapOf<String, WebSocket>()
@@ -274,7 +275,7 @@ class DirectConnectionManager @Inject constructor(
     /**
      * معالجة طلبات الاتصال المباشر
      */
-    private fun handleDirectConnection(request: Any): String {
+    private fun handleDirectConnection(session: fi.iki.elonen.NanoHTTPD.IHTTPSession): String {
         // معالجة طلب الاتصال وإرجاع معلومات الاتصال
         return JSONObject().apply {
             put("status", "connected")
