@@ -99,7 +99,9 @@ curl -X GET "$url/connection-info" \
 """.trimIndent()
 
     // ─── JavaScript ──────────────────────────────────────────────────────────
-    private fun buildJs(url: String, key: String) = """
+    private fun buildJs(url: String, key: String): String {
+        val d = "$" // dollar sign for JS template literals
+        return """
 // ============================================================
 //  SMS Payment Gateway — API Documentation (JavaScript)
 // ============================================================
@@ -107,19 +109,19 @@ const BASE_URL = "$url";
 const API_KEY  = "$key";
 
 const headers = {
-  "Authorization": `Bearer ${'$'}{API_KEY}`,
+  "Authorization": `Bearer ${d}{API_KEY}`,
   "Content-Type": "application/json"
 };
 
 // 1) Health Check
 async function healthCheck() {
-  const res = await fetch(`${'$'}{BASE_URL}/health`, { headers });
+  const res = await fetch(`${d}{BASE_URL}/health`, { headers });
   return res.json();
 }
 
 // 2) Create Transaction
 async function createTransaction(id, amount, phone, walletType = "VODAFONE_CASH") {
-  const res = await fetch(`${'$'}{BASE_URL}/transactions`, {
+  const res = await fetch(`${d}{BASE_URL}/transactions`, {
     method: "POST", headers,
     body: JSON.stringify({ id, amount, phoneNumber: phone, walletType, expiresInMinutes: 30 })
   });
@@ -128,7 +130,7 @@ async function createTransaction(id, amount, phone, walletType = "VODAFONE_CASH"
 
 // 3) Get Transaction Status
 async function getTransaction(id) {
-  const res = await fetch(`${'$'}{BASE_URL}/transactions/${'$'}{id}`, { headers });
+  const res = await fetch(`${d}{BASE_URL}/transactions/${d}{id}`, { headers });
   return res.json();
 }
 
@@ -163,9 +165,11 @@ function connectWebSocket(onPayment) {
   connectWebSocket(data => console.log("Payment confirmed:", data));
 })();
 """.trimIndent()
+    }
 
     // ─── Python ──────────────────────────────────────────────────────────────
-    private fun buildPython(url: String, key: String) = """
+    private fun buildPython(url: String, key: String): String {
+        return """
 # ============================================================
 #  SMS Payment Gateway — API Documentation (Python)
 #  pip install requests websocket-client
@@ -224,9 +228,12 @@ if __name__ == "__main__":
     confirmed = wait_for_payment("order-001")
     print("Confirmed:", confirmed)
 """.trimIndent()
+    }
 
     // ─── PHP ─────────────────────────────────────────────────────────────────
-    private fun buildPhp(url: String, key: String) = """
+    private fun buildPhp(url: String, key: String): String {
+        val d = "$" // dollar sign for PHP variables
+        return """
 <?php
 // ============================================================
 //  SMS Payment Gateway — API Documentation (PHP)
@@ -234,59 +241,62 @@ if __name__ == "__main__":
 define('BASE_URL', '$url');
 define('API_KEY',  '$key');
 
-function apiRequest(string ${'$'}method, string ${'$'}endpoint, array ${'$'}data = []): array {
-    ${'$'}ch = curl_init(BASE_URL . ${'$'}endpoint);
-    curl_setopt_array(${'$'}ch, [
+function apiRequest(string ${d}method, string ${d}endpoint, array ${d}data = []): array {
+    ${d}ch = curl_init(BASE_URL . ${d}endpoint);
+    curl_setopt_array(${d}ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CUSTOMREQUEST  => ${'$'}method,
+        CURLOPT_CUSTOMREQUEST  => ${d}method,
         CURLOPT_HTTPHEADER     => [
             'Authorization: Bearer ' . API_KEY,
             'Content-Type: application/json'
         ],
     ]);
-    if (!empty(${'$'}data)) curl_setopt(${'$'}ch, CURLOPT_POSTFIELDS, json_encode(${'$'}data));
-    ${'$'}response = curl_exec(${'$'}ch);
-    curl_close(${'$'}ch);
-    return json_decode(${'$'}response, true) ?? [];
+    if (!empty(${d}data)) curl_setopt(${d}ch, CURLOPT_POSTFIELDS, json_encode(${d}data));
+    ${d}response = curl_exec(${d}ch);
+    curl_close(${d}ch);
+    return json_decode(${d}response, true) ?? [];
 }
 
 // 1) Health Check
 function healthCheck(): array { return apiRequest('GET', '/health'); }
 
 // 2) Create Transaction
-function createTransaction(string ${'$'}id, float ${'$'}amount, string ${'$'}phone): array {
+function createTransaction(string ${d}id, float ${d}amount, string ${d}phone): array {
     return apiRequest('POST', '/transactions', [
-        'id' => ${'$'}id, 'amount' => ${'$'}amount,
-        'phoneNumber' => ${'$'}phone, 'walletType' => 'VODAFONE_CASH',
+        'id' => ${d}id, 'amount' => ${d}amount,
+        'phoneNumber' => ${d}phone, 'walletType' => 'VODAFONE_CASH',
         'expiresInMinutes' => 30
     ]);
 }
 
 // 3) Get Transaction Status
-function getTransaction(string ${'$'}id): array { return apiRequest('GET', "/transactions/${'$'}id"); }
+function getTransaction(string ${d}id): array { return apiRequest('GET', "/transactions/${d}id"); }
 
 // 4) Poll Until Confirmed
-function waitForPayment(string ${'$'}id, int ${'$'}timeout = 300): ?array {
-    ${'$'}start = time();
-    while (time() - ${'$'}start < ${'$'}timeout) {
-        ${'$'}tx = getTransaction(${'$'}id);
-        if ((${'$'}tx['status'] ?? '') === 'MATCHED') return ${'$'}tx;
+function waitForPayment(string ${d}id, int ${d}timeout = 300): ?array {
+    ${d}start = time();
+    while (time() - ${d}start < ${d}timeout) {
+        ${d}tx = getTransaction(${d}id);
+        if ((${d}tx['status'] ?? '') === 'MATCHED') return ${d}tx;
         sleep(5);
     }
     return null;
 }
 
 // ─── Usage ───────────────────────────────────────────────────
-${'$'}tx = createTransaction('order-001', 500.0, '01012345678');
-echo "Created: " . json_encode(${'$'}tx) . PHP_EOL;
+${d}tx = createTransaction('order-001', 500.0, '01012345678');
+echo "Created: " . json_encode(${d}tx) . PHP_EOL;
 
-${'$'}confirmed = waitForPayment('order-001');
-echo "Confirmed: " . json_encode(${'$'}confirmed) . PHP_EOL;
+${d}confirmed = waitForPayment('order-001');
+echo "Confirmed: " . json_encode(${d}confirmed) . PHP_EOL;
 ?>
 """.trimIndent()
+    }
 
     // ─── Kotlin ──────────────────────────────────────────────────────────────
-    private fun buildKotlin(url: String, key: String) = """
+    private fun buildKotlin(url: String, key: String): String {
+        val d = "$" // dollar sign for Kotlin string templates
+        return """
 // ============================================================
 //  SMS Payment Gateway — API Documentation (Kotlin)
 //  implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -305,8 +315,8 @@ object SmsGateway {
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject {
         val reqBody = body?.toString()?.toRequestBody(JSON)
         val req = Request.Builder()
-            .url("${'$'}{BASE_URL}${'$'}{path}")
-            .header("Authorization", "Bearer ${'$'}{API_KEY}")
+            .url("${d}{BASE_URL}${d}{path}")
+            .header("Authorization", "Bearer ${d}{API_KEY}")
             .method(method, reqBody)
             .build()
         client.newCall(req).execute().use { return JSONObject(it.body!!.string()) }
@@ -321,7 +331,7 @@ object SmsGateway {
             put("expiresInMinutes", 30)
         })
 
-    fun getTransaction(id: String) = request("GET", "/transactions/${'$'}{id}")
+    fun getTransaction(id: String) = request("GET", "/transactions/${d}{id}")
 
     fun waitForPayment(id: String, timeoutMs: Long = 300_000): JSONObject? {
         val end = System.currentTimeMillis() + timeoutMs
@@ -353,14 +363,16 @@ object SmsGateway {
 // ─── Usage ───────────────────────────────────────────────────
 fun main() {
     SmsGateway.createTransaction("order-001", 500.0, "01012345678")
-    SmsGateway.connectWebSocket { println("Confirmed: ${'$'}{it}") }
+    SmsGateway.connectWebSocket { println("Confirmed: ${d}{it}") }
     val result = SmsGateway.waitForPayment("order-001")
-    println("Result: ${'$'}{result}")
+    println("Result: ${d}{result}")
 }
 """.trimIndent()
+    }
 
     // ─── Java ────────────────────────────────────────────────────────────────
-    private fun buildJava(url: String, key: String) = """
+    private fun buildJava(url: String, key: String): String {
+        return """
 // ============================================================
 //  SMS Payment Gateway — API Documentation (Java)
 //  <dependency>com.squareup.okhttp3:okhttp:4.12.0</dependency>
@@ -421,9 +433,12 @@ public class SmsGateway {
     }
 }
 """.trimIndent()
+    }
 
     // ─── Dart / Flutter ──────────────────────────────────────────────────────
-    private fun buildDart(url: String, key: String) = """
+    private fun buildDart(url: String, key: String): String {
+        val d = "$" // dollar sign for Dart string interpolation
+        return """
 // ============================================================
 //  SMS Payment Gateway — API Documentation (Dart / Flutter)
 //  dependencies: http: ^1.2.0  web_socket_channel: ^2.4.0
@@ -437,20 +452,20 @@ class SmsGateway {
   static const baseUrl = '$url';
   static const apiKey  = '$key';
   static final _headers = {
-    'Authorization': 'Bearer ${'$'}{apiKey}',
+    'Authorization': 'Bearer ${d}{apiKey}',
     'Content-Type': 'application/json',
   };
 
   // 1) Health Check
   static Future<Map> healthCheck() async {
-    final res = await http.get(Uri.parse('${'$'}{baseUrl}/health'), headers: _headers);
+    final res = await http.get(Uri.parse('${d}{baseUrl}/health'), headers: _headers);
     return jsonDecode(res.body);
   }
 
   // 2) Create Transaction
   static Future<Map> createTransaction(String id, double amount, String phone) async {
     final res = await http.post(
-      Uri.parse('${'$'}{baseUrl}/transactions'),
+      Uri.parse('${d}{baseUrl}/transactions'),
       headers: _headers,
       body: jsonEncode({'id': id, 'amount': amount, 'phoneNumber': phone,
                         'walletType': 'VODAFONE_CASH', 'expiresInMinutes': 30}),
@@ -460,7 +475,7 @@ class SmsGateway {
 
   // 3) Get Transaction
   static Future<Map> getTransaction(String id) async {
-    final res = await http.get(Uri.parse('${'$'}{baseUrl}/transactions/${'$'}{id}'), headers: _headers);
+    final res = await http.get(Uri.parse('${d}{baseUrl}/transactions/${d}{id}'), headers: _headers);
     return jsonDecode(res.body);
   }
 
@@ -492,15 +507,18 @@ void main() async {
   final channel = SmsGateway.connectWebSocket();
   channel.stream.listen((msg) {
     final data = jsonDecode(msg);
-    if (data['event'] == 'PAYMENT_CONFIRMED') print('Confirmed: ${'$'}{data['data']}');
+    if (data['event'] == 'PAYMENT_CONFIRMED') print('Confirmed: ${d}{data['data']}');
   });
   final result = await SmsGateway.waitForPayment('order-001');
-  print('Result: ${'$'}{result}');
+  print('Result: ${d}{result}');
 }
 """.trimIndent()
+    }
 
     // ─── C# ──────────────────────────────────────────────────────────────────
-    private fun buildCsharp(url: String, key: String) = """
+    private fun buildCsharp(url: String, key: String): String {
+        val d = "$" // dollar sign for C# string interpolation
+        return """
 // ============================================================
 //  SMS Payment Gateway — API Documentation (C#)
 //  NuGet: Install-Package Newtonsoft.Json
@@ -523,13 +541,13 @@ public class SmsGateway
 
     static SmsGateway()
     {
-        client.DefaultRequestHeaders.Add("Authorization", ${'$'}"Bearer {ApiKey}");
+        client.DefaultRequestHeaders.Add("Authorization", ${d}"Bearer {ApiKey}");
     }
 
     // 1) Health Check
     public static async Task<JObject> HealthCheck()
     {
-        var response = await client.GetAsync(${'$'}"{BaseUrl}/health");
+        var response = await client.GetAsync(${d}"{BaseUrl}/health");
         var json = await response.Content.ReadAsStringAsync();
         return JObject.Parse(json);
     }
@@ -542,7 +560,7 @@ public class SmsGateway
             walletType = "VODAFONE_CASH", expiresInMinutes = 30
         };
         var content = new StringContent(JsonConvert.SerializeObject(data), Encoding.UTF8, "application/json");
-        var response = await client.PostAsync(${'$'}"{BaseUrl}/transactions", content);
+        var response = await client.PostAsync(${d}"{BaseUrl}/transactions", content);
         var json = await response.Content.ReadAsStringAsync();
         return JObject.Parse(json);
     }
@@ -550,7 +568,7 @@ public class SmsGateway
     // 3) Get Transaction Status
     public static async Task<JObject> GetTransaction(string id)
     {
-        var response = await client.GetAsync(${'$'}"{BaseUrl}/transactions/{id}");
+        var response = await client.GetAsync(${d}"{BaseUrl}/transactions/{id}");
         var json = await response.Content.ReadAsStringAsync();
         return JObject.Parse(json);
     }
@@ -597,10 +615,11 @@ class Program
     static async Task Main(string[] args)
     {
         await SmsGateway.CreateTransaction("order-001", 500.0, "01012345678");
-        _ = SmsGateway.ConnectWebSocket(data => Console.WriteLine(${'$'}"Confirmed: {data}"));
+        _ = SmsGateway.ConnectWebSocket(data => Console.WriteLine(${d}"Confirmed: {data}"));
         var result = await SmsGateway.WaitForPayment("order-001");
-        Console.WriteLine(${'$'}"Result: {result}");
+        Console.WriteLine(${d}"Result: {result}");
     }
 }
 """.trimIndent()
+    }
 }
