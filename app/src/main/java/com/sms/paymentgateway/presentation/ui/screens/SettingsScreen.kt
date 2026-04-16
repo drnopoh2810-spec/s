@@ -393,34 +393,45 @@ fun ConnectionCardWidget(
     onCopy: (String) -> Unit,
     onShowDetails: () -> Unit
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
+        colors = CardDefaults.elevatedCardColors(
             containerColor = if (card != null && relayConnected)
                 MaterialTheme.colorScheme.primaryContainer
             else
                 MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (card == null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Warning,
-                        "تحذير",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Warning,
+                                "تحذير",
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
                     Text(
                         "أضف رابط خادم الوسيط أولاً لإنشاء رابط الاتصال",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
             } else {
                 Text(
                     "رابط API لموقعك:",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Row(
@@ -428,26 +439,30 @@ fun ConnectionCardWidget(
                         .fillMaxWidth()
                         .background(
                             MaterialTheme.colorScheme.surface,
-                            RoundedCornerShape(8.dp)
+                            RoundedCornerShape(12.dp)
                         )
-                        .padding(10.dp),
+                        .padding(16.dp),
                     Arrangement.SpaceBetween,
                     Alignment.CenterVertically
                 ) {
                     Text(
                         card.apiUrl,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = { onCopy(card.apiUrl) }) {
-                        Icon(Icons.Default.Share, "نسخ")
+                        Icon(
+                            Icons.Default.Share,
+                            "نسخ",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
 
                 Text(
                     "مفتاح API:",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Row(
@@ -455,30 +470,42 @@ fun ConnectionCardWidget(
                         .fillMaxWidth()
                         .background(
                             MaterialTheme.colorScheme.surface,
-                            RoundedCornerShape(8.dp)
+                            RoundedCornerShape(12.dp)
                         )
-                        .padding(10.dp),
+                        .padding(16.dp),
                     Arrangement.SpaceBetween,
                     Alignment.CenterVertically
                 ) {
                     Text(
                         "${card.apiKey.take(20)}…",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = { onCopy(card.apiKey) }) {
-                        Icon(Icons.Default.Share, "نسخ")
+                        Icon(
+                            Icons.Default.Share,
+                            "نسخ",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
 
                 Button(
                     onClick = onShowDetails,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
                 ) {
                     Icon(Icons.Default.Info, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("عرض أمثلة الكود الكامل")
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "عرض أمثلة الكود الكامل",
+                        style = MaterialTheme.typography.titleSmall
+                    )
                 }
             }
         }
@@ -624,12 +651,13 @@ private fun SettingsCard(
     containerColor: Color = MaterialTheme.colorScheme.surface,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        colors = CardDefaults.elevatedCardColors(containerColor = containerColor),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        Column(Modifier.padding(16.dp), content = content)
+        Column(Modifier.padding(20.dp), content = content)
     }
 }
 

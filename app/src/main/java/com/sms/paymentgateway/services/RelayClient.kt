@@ -32,20 +32,22 @@ class RelayClient @Inject constructor(
 
     private var webSocket: WebSocket? = null
     private var reconnectAttempts = 0
-    private val MAX_RECONNECT_ATTEMPTS = 50
+    private val MAX_RECONNECT_ATTEMPTS = Int.MAX_VALUE // إعادة محاولة لا نهائية
     private var isManualDisconnect = false
+    private var lastSuccessfulConnection = 0L
 
     private val handler = Handler(Looper.getMainLooper())
     private var heartbeatRunnable: Runnable? = null
+    private var connectionCheckRunnable: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .pingInterval(15, TimeUnit.SECONDS)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(40, TimeUnit.SECONDS)
-            .writeTimeout(40, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }
@@ -67,12 +69,14 @@ class RelayClient @Inject constructor(
         isManualDisconnect = false
         reconnectAttempts = 0
         connect()
+        startConnectionMonitor()
     }
 
     fun stop() {
         Log.d(TAG, "⏹️ إيقاف RelayClient…")
         _started = false
         disconnect()
+        stopConnectionMonitor()
         unregisterNetworkCallback()
     }
 
@@ -130,7 +134,8 @@ class RelayClient @Inject constructor(
         override fun onOpen(ws: WebSocket, response: Response) {
             _connected = true
             reconnectAttempts = 0
-            Log.i(TAG, "✅ WebSocket متصل بنجاح")
+            lastSuccessfulConnection = System.currentTimeMillis()
+            Log.i(TAG, "✅ WebSocket متصل بنجاح بـ Huggingface Relay")
             wakeLock?.let { if (!it.isHeld) it.acquire(10 * 60 * 1000L) }
             startHeartbeat()
             sendRegistration()
@@ -167,38 +172,102 @@ class RelayClient @Inject constructor(
 
     private fun scheduleReconnect() {
         if (isManualDisconnect || !_started) return
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) reconnectAttempts = 0
+        
+        // إعادة تعيين العداد بعد 50 محاولة لتجنب التأخير الطويل جداً
+        if (reconnectAttempts >= 50) {
+            reconnectAttempts = 10 // البدء من محاولة 10 بدلاً من 0
+            Log.d(TAG, "🔄 إعادة تعيين عداد المحاولات")
+        }
 
+        // Exponential backoff مع حد أقصى 5 دقائق
         val baseDelay = (1L shl reconnectAttempts.coerceAtMost(8)).coerceAtMost(300)
         val jitter    = (Math.random() * 10).toLong()
         val delay     = baseDelay + jitter
 
-        Log.d(TAG, "⏰ إعادة الاتصال بعد ${delay}s (محاولة ${reconnectAttempts + 1}/$MAX_RECONNECT_ATTEMPTS)")
-        handler.postDelayed({ if (_started && !isManualDisconnect) connect() }, delay * 1000)
+        Log.d(TAG, "⏰ إعادة الاتصال بعد ${delay}s (محاولة ${reconnectAttempts + 1})")
+        handler.postDelayed({ 
+            if (_started && !isManualDisconnect) {
+                Log.d(TAG, "🔄 محاولة إعادة الاتصال...")
+                connect() 
+            }
+        }, delay * 1000)
         reconnectAttempts++
+    }
+
+    /**
+     * مراقب اتصال إضافي للتأكد من عدم فقدان الاتصال
+     */
+    private fun startConnectionMonitor() {
+        stopConnectionMonitor()
+        connectionCheckRunnable = object : Runnable {
+            override fun run() {
+                if (!_started) return
+                
+                // التحقق من الاتصال كل دقيقة
+                if (!_connected && isNetworkAvailable()) {
+                    Log.w(TAG, "⚠️ مراقب الاتصال: غير متصل رغم وجود الإنترنت - محاولة إعادة الاتصال")
+                    reconnectAttempts = 0
+                    connect()
+                } else if (_connected) {
+                    // التحقق من آخر اتصال ناجح
+                    val timeSinceLastConnection = System.currentTimeMillis() - lastSuccessfulConnection
+                    if (timeSinceLastConnection > 5 * 60 * 1000) { // 5 دقائق
+                        Log.w(TAG, "⚠️ لم يتم تحديث الاتصال منذ 5 دقائق - إعادة الاتصال")
+                        disconnect()
+                        handler.postDelayed({ connect() }, 2000)
+                    }
+                }
+                
+                // إعادة الجدولة
+                if (_started) {
+                    handler.postDelayed(this, 60_000) // كل دقيقة
+                }
+            }
+        }
+        handler.postDelayed(connectionCheckRunnable!!, 60_000)
+        Log.d(TAG, "🔍 بدء مراقب الاتصال")
+    }
+
+    private fun stopConnectionMonitor() {
+        connectionCheckRunnable?.let { handler.removeCallbacks(it) }
+        connectionCheckRunnable = null
     }
 
     private fun startHeartbeat() {
         stopHeartbeat()
         heartbeatRunnable = object : Runnable {
             override fun run() {
-                if (!_connected || webSocket == null || !_started) return
+                if (!_connected || webSocket == null || !_started) {
+                    Log.w(TAG, "⚠️ Heartbeat: الاتصال مفقود")
+                    return
+                }
+                
                 val ping = JSONObject().apply {
                     put("type", "ping")
                     put("timestamp", System.currentTimeMillis())
                 }.toString()
+                
                 val sent = webSocket?.send(ping) ?: false
                 if (!sent) {
-                    Log.w(TAG, "⚠️ فشل إرسال Heartbeat")
+                    Log.w(TAG, "⚠️ فشل إرسال Heartbeat - إعادة الاتصال")
                     _connected = false
-                    if (_started && !isManualDisconnect) scheduleReconnect()
+                    if (_started && !isManualDisconnect) {
+                        handler.postDelayed({ connect() }, 2000)
+                    }
                     return
                 }
+                
                 Log.v(TAG, "💓 Heartbeat أُرسل")
-                if (_connected && _started) handler.postDelayed(this, 20_000)
+                lastSuccessfulConnection = System.currentTimeMillis()
+                
+                // إعادة جدولة Heartbeat التالي
+                if (_connected && _started) {
+                    handler.postDelayed(this, 20_000) // كل 20 ثانية
+                }
             }
         }
         handler.postDelayed(heartbeatRunnable!!, 20_000)
+        Log.d(TAG, "💓 بدء Heartbeat")
     }
 
     private fun stopHeartbeat() {
@@ -261,25 +330,49 @@ class RelayClient @Inject constructor(
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
             .build()
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
+                Log.i(TAG, "🌐 الشبكة متاحة")
                 if (!_connected && !isManualDisconnect && _started) {
                     handler.postDelayed({
                         if (!_connected && _started && !isManualDisconnect) {
+                            Log.d(TAG, "🔄 إعادة الاتصال بعد توفر الشبكة")
                             reconnectAttempts = 0
                             connect()
                         }
                     }, 2_000)
                 }
             }
+            
             override fun onLost(network: Network) {
                 Log.w(TAG, "📵 فُقد الاتصال بالشبكة")
                 _connected = false
             }
+            
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                val validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                
+                if (hasInternet && validated && !_connected && !isManualDisconnect && _started) {
+                    Log.d(TAG, "🌐 الإنترنت متاح ومُتحقق منه - محاولة الاتصال")
+                    handler.postDelayed({
+                        if (!_connected && _started && !isManualDisconnect) {
+                            reconnectAttempts = 0
+                            connect()
+                        }
+                    }, 1_000)
+                }
+            }
         }
-        try { cm.registerNetworkCallback(req, networkCallback!!) }
-        catch (e: Exception) { Log.e(TAG, "فشل تسجيل مراقب الشبكة: ${e.message}") }
+        try { 
+            cm.registerNetworkCallback(req, networkCallback!!)
+            Log.d(TAG, "✅ تم تسجيل مراقب الشبكة")
+        }
+        catch (e: Exception) { 
+            Log.e(TAG, "❌ فشل تسجيل مراقب الشبكة: ${e.message}") 
+        }
     }
 
     private fun unregisterNetworkCallback() {

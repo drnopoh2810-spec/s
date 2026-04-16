@@ -20,7 +20,7 @@ class PaymentGatewayService : Service() {
 
     @Inject lateinit var apiServer: ApiServer
     @Inject lateinit var cleanupManager: CleanupManager
-    @Inject lateinit var directConnectionManager: DirectConnectionManager
+    @Inject lateinit var relayClient: RelayClient
     @Inject lateinit var connectionMonitor: ConnectionMonitor
 
     private val CHANNEL_ID      = "payment_gateway_channel"
@@ -28,14 +28,14 @@ class PaymentGatewayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Timber.i("🚀 بدء خدمة بوابة الدفع - الاتصال المباشر")
+        Timber.i("🚀 بدء خدمة بوابة الدفع - Huggingface Relay")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
 
-        // بدء خادم API
+        // بدء خادم API المحلي
         runCatching { 
             apiServer.start()
-            Timber.i("✅ خادم API يعمل على المنفذ 8080") 
+            Timber.i("✅ خادم API المحلي يعمل على المنفذ 8080") 
         }.onFailure { 
             Timber.e(it, "❌ فشل تشغيل خادم API") 
         }
@@ -49,13 +49,13 @@ class PaymentGatewayService : Service() {
             }
         }
 
-        // بدء مدير الاتصال المباشر (بدلاً من RelayClient)
+        // بدء RelayClient للاتصال بـ Huggingface Relay
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { 
-                directConnectionManager.start()
-                Timber.i("✅ مدير الاتصال المباشر يعمل") 
+                relayClient.start()
+                Timber.i("✅ RelayClient متصل بـ Huggingface Relay") 
             }.onFailure { 
-                Timber.e(it, "❌ فشل تشغيل مدير الاتصال المباشر") 
+                Timber.e(it, "❌ فشل الاتصال بـ Relay Server") 
             }
         }
 
@@ -71,10 +71,10 @@ class PaymentGatewayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.i("🔄 إعادة تشغيل الخدمة")
         
-        // التأكد من أن مدير الاتصال المباشر يعمل
+        // التأكد من أن RelayClient يعمل
         CoroutineScope(Dispatchers.IO).launch {
-            if (!directConnectionManager.isActive.value) {
-                directConnectionManager.start()
+            if (!relayClient.isConnected()) {
+                relayClient.connect()
             }
         }
         
@@ -87,7 +87,7 @@ class PaymentGatewayService : Service() {
         
         runCatching { apiServer.stop() }
         runCatching { cleanupManager.stopCleanup() }
-        runCatching { directConnectionManager.stop() }
+        runCatching { relayClient.stop() }
         runCatching { connectionMonitor.stopMonitoring() }
     }
 
@@ -96,10 +96,10 @@ class PaymentGatewayService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "بوابة دفع SMS - اتصال مباشر",
+                CHANNEL_ID, "بوابة دفع SMS - Huggingface Relay",
                 NotificationManager.IMPORTANCE_LOW
             ).apply { 
-                description = "تشغيل خدمة بوابة الدفع مع الاتصال المباشر في الخلفية" 
+                description = "تشغيل خدمة بوابة الدفع مع Huggingface Relay في الخلفية" 
             }
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
@@ -107,11 +107,11 @@ class PaymentGatewayService : Service() {
     }
 
     private fun createNotification(): Notification {
-        val connectionUrl = directConnectionManager.connectionUrl.value ?: "جاري التحضير..."
+        val status = if (relayClient.isConnected()) "متصل ✓" else "غير متصل"
         
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("بوابة دفع SMS - اتصال مباشر")
-            .setContentText("الخدمة تعمل: $connectionUrl")
+            .setContentTitle("بوابة دفع SMS - Huggingface Relay")
+            .setContentText("الخدمة تعمل: $status")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

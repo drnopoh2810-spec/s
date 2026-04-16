@@ -45,16 +45,15 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // معلومات الاتصال المباشر المحدثة
+            // معلومات الاتصال عبر Relay
             item { 
-                Text("🔗 حالة الاتصال المباشر", style = MaterialTheme.typography.headlineSmall) 
+                Text("🔗 حالة الاتصال - Huggingface Relay", style = MaterialTheme.typography.headlineSmall) 
             }
             
             item {
-                EnhancedConnectionStatusCard(
+                SimpleConnectionStatusCard(
                     connectionInfo = connectionInfo,
-                    onRestartConnection = { viewModel.restartConnection() },
-                    onAnalyzeAccess = { viewModel.analyzeExternalAccess() }
+                    onRestartConnection = { viewModel.restartConnection() }
                 )
             }
 
@@ -125,18 +124,28 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
 
 @Composable
 fun StatCard(title: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
+    ElevatedCard(
+        modifier = modifier,
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+    ) {
         Column(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 value,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
-            Text(title, style = MaterialTheme.typography.bodySmall)
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }
@@ -152,10 +161,21 @@ fun EmptyCard(message: String) {
 
 @Composable
 fun TransactionCard(tx: PendingTransaction) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                Text(tx.id, style = MaterialTheme.typography.titleMedium)
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                Arrangement.SpaceBetween,
+                Alignment.CenterVertically
+            ) {
+                Text(
+                    tx.id,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
                 Badge(
                     containerColor = when (tx.status) {
                         TransactionStatus.PENDING -> MaterialTheme.colorScheme.primaryContainer
@@ -163,19 +183,63 @@ fun TransactionCard(tx: PendingTransaction) {
                         else                       -> MaterialTheme.colorScheme.errorContainer
                     }
                 ) {
-                    Text(when (tx.status) {
-                        TransactionStatus.PENDING   -> "معلّق"
-                        TransactionStatus.MATCHED   -> "تم ✓"
-                        TransactionStatus.EXPIRED   -> "منتهي"
-                        TransactionStatus.CANCELLED -> "ملغي"
-                    })
+                    Text(
+                        when (tx.status) {
+                            TransactionStatus.PENDING   -> "معلّق ⏳"
+                            TransactionStatus.MATCHED   -> "تم ✓"
+                            TransactionStatus.EXPIRED   -> "منتهي ⏰"
+                            TransactionStatus.CANCELLED -> "ملغي ✗"
+                        },
+                        style = MaterialTheme.typography.labelLarge
+                    )
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Text("المبلغ: ${tx.amount} جنيه", style = MaterialTheme.typography.bodyLarge)
-            Text("الهاتف: ${tx.phoneNumber}", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "المبلغ",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "${tx.amount} جنيه",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "رقم الهاتف",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        tx.phoneNumber,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
             tx.confidence?.let {
-                Text("الثقة: ${(it * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = it.toFloat(),
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "الثقة: ${(it * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -183,144 +247,140 @@ fun TransactionCard(tx: PendingTransaction) {
 
 @Composable
 fun SmsLogCard(sms: SmsLog) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                Text(sms.sender, style = MaterialTheme.typography.titleMedium)
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                Arrangement.SpaceBetween,
+                Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = if (sms.parsed)
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        else
+                            MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                if (sms.parsed) "✓" else "✗",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (sms.parsed)
+                                    MaterialTheme.colorScheme.onTertiaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                    Text(
+                        sms.sender,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
                 Text(
-                    if (sms.parsed) "✓ تم التحليل" else "✗ فشل",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (sms.parsed) MaterialTheme.colorScheme.tertiary
-                    else MaterialTheme.colorScheme.error
+                    if (sms.parsed) "تم التحليل" else "فشل التحليل",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (sms.parsed)
+                        MaterialTheme.colorScheme.tertiary
+                    else
+                        MaterialTheme.colorScheme.error
                 )
             }
-            Spacer(Modifier.height(4.dp))
-            sms.amount?.let { Text("المبلغ: $it جنيه") }
-            sms.transactionId?.let { Text("رقم العملية: $it") }
-            if (sms.matched) Text("✓ تمت المطابقة", color = MaterialTheme.colorScheme.tertiary)
-        }
-    }
-}
-
-@Composable
-fun ConnectionStatusCard(
-    connectionInfo: ConnectionInfo,
-    onRestartConnection: () -> Unit
-) {
-    val clipboardManager = LocalClipboardManager.current
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (connectionInfo.isActive) 
-                MaterialTheme.colorScheme.primaryContainer 
-            else 
-                MaterialTheme.colorScheme.errorContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (connectionInfo.isActive) "🟢 الاتصال نشط" else "🔴 الاتصال متوقف",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Button(
-                    onClick = onRestartConnection,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
-                    )
+            
+            Spacer(Modifier.height(12.dp))
+            
+            sms.amount?.let {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("إعادة تشغيل")
+                    Icon(
+                        Icons.Default.AccountBox,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "المبلغ: $it جنيه",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
             
-            if (connectionInfo.isActive) {
-                Divider()
-                
+            sms.transactionId?.let {
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "رابط الاتصال المباشر:",
+                    "رقم العملية: $it",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                 )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            }
+            
+            if (sms.matched) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                 ) {
-                    Text(
-                        text = connectionInfo.connectionUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    TextButton(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(connectionInfo.connectionUrl))
-                        }
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("نسخ")
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            "تمت المطابقة",
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-                
-                Text(
-                    text = "العملاء المتصلين: ${connectionInfo.connectedClients}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                
-                if (connectionInfo.clientsList.isNotEmpty()) {
-                    Text(
-                        text = "قائمة العملاء: ${connectionInfo.clientsList.joinToString(", ")}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                Text(
-                    text = "الخدمة متوقفة. اضغط 'إعادة تشغيل' لبدء الاتصال المباشر.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
             }
         }
     }
 }
 
 @Composable
-fun EnhancedConnectionStatusCard(
+fun SimpleConnectionStatusCard(
     connectionInfo: ConnectionInfo,
-    onRestartConnection: () -> Unit,
-    onAnalyzeAccess: () -> Unit
+    onRestartConnection: () -> Unit
 ) {
-    val clipboardManager = LocalClipboardManager.current
-    
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
+        colors = CardDefaults.elevatedCardColors(
             containerColor = if (connectionInfo.isActive) 
                 MaterialTheme.colorScheme.primaryContainer 
             else 
                 MaterialTheme.colorScheme.errorContainer
-        )
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // العنوان والأزرار
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -328,236 +388,73 @@ fun EnhancedConnectionStatusCard(
             ) {
                 Column {
                     Text(
-                        text = if (connectionInfo.isActive) "🟢 الاتصال نشط" else "🔴 الاتصال متوقف",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = if (connectionInfo.isActive) "🟢 متصل بـ Relay" else "🔴 غير متصل",
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    if (connectionInfo.networkInfo != null) {
-                        Text(
-                            text = "نوع الشبكة: ${getNetworkTypeArabic(connectionInfo.networkInfo.networkType)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                    Text(
+                        text = "Huggingface Relay Server",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                </Column>
                 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onAnalyzeAccess,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiary
-                        )
-                    ) {
-                        Text("تحليل الوصول")
-                    }
-                    
-                    Button(
-                        onClick = onRestartConnection,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Text("إعادة تشغيل")
-                    }
+                Button(
+                    onClick = onRestartConnection,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Text("إعادة الاتصال")
                 }
             }
             
             if (connectionInfo.isActive) {
                 Divider()
                 
-                // معلومات الشبكة
-                if (connectionInfo.networkInfo != null) {
-                    NetworkInfoSection(connectionInfo.networkInfo, clipboardManager)
-                    
-                    Divider()
-                }
-                
-                // الروابط المتاحة
-                if (connectionInfo.availableUrls.isNotEmpty()) {
-                    Text(
-                        text = "الروابط المتاحة:",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                    
-                    connectionInfo.availableUrls.forEach { url ->
-                        ConnectionUrlItem(url, clipboardManager)
-                    }
-                    
-                    Divider()
-                }
-                
-                // أفضل رابط للاستخدام
-                connectionInfo.bestUrl?.let { bestUrl ->
-                    Text(
-                        text = "الرابط المُوصى به:",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
                         Text(
-                            text = bestUrl,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
+                            text = "الحالة",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        
-                        TextButton(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(bestUrl))
-                            }
-                        ) {
-                            Text("نسخ")
-                        }
+                        Text(
+                            text = "نشط ✓",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "نوع الاتصال",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "WebSocket",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
                 
-                // إحصائيات الاتصال
                 Text(
-                    text = "العملاء المتصلين: ${connectionInfo.connectedClients}",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "✅ التطبيق متصل بخادم Relay ويستقبل الطلبات",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                
-                if (connectionInfo.clientsList.isNotEmpty()) {
-                    Text(
-                        text = "قائمة العملاء: ${connectionInfo.clientsList.joinToString(", ")}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             } else {
                 Text(
-                    text = "الخدمة متوقفة. اضغط 'إعادة تشغيل' لبدء الاتصال المباشر.",
+                    text = "⚠️ الخدمة متوقفة. اضغط 'إعادة الاتصال' أو تأكد من إعداد رابط Relay في الإعدادات.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun NetworkInfoSection(
-    networkInfo: NetworkDetector.NetworkInfo,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "معلومات الشبكة:",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium
-        )
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("IP المحلي:", style = MaterialTheme.typography.bodySmall)
-            Text(networkInfo.localIp, style = MaterialTheme.typography.bodySmall)
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("IP العام:", style = MaterialTheme.typography.bodySmall)
-            Text(
-                networkInfo.publicIp ?: "غير متاح", 
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("الوصول العام:", style = MaterialTheme.typography.bodySmall)
-            Text(
-                if (networkInfo.isPublicAccessible) "متاح ✅" else "غير متاح ❌",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (networkInfo.isPublicAccessible) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.error
-            )
-        }
-    }
-}
-
-@Composable
-fun ConnectionUrlItem(
-    url: NetworkDetector.ConnectionUrl,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = when (url.accessible) {
-                NetworkDetector.AccessibilityLevel.PUBLIC_READY -> MaterialTheme.colorScheme.primaryContainer
-                NetworkDetector.AccessibilityLevel.LOCAL_ONLY -> MaterialTheme.colorScheme.secondaryContainer
-                NetworkDetector.AccessibilityLevel.REQUIRES_SETUP -> MaterialTheme.colorScheme.tertiaryContainer
-                NetworkDetector.AccessibilityLevel.UNKNOWN -> MaterialTheme.colorScheme.surfaceVariant
-            }
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = url.type.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Text(
-                    text = getAccessibilityArabic(url.accessible),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when (url.accessible) {
-                        NetworkDetector.AccessibilityLevel.PUBLIC_READY -> MaterialTheme.colorScheme.primary
-                        NetworkDetector.AccessibilityLevel.LOCAL_ONLY -> MaterialTheme.colorScheme.secondary
-                        NetworkDetector.AccessibilityLevel.REQUIRES_SETUP -> MaterialTheme.colorScheme.tertiary
-                        NetworkDetector.AccessibilityLevel.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-            
-            Text(
-                text = url.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = url.url,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                TextButton(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(url.url))
-                    }
-                ) {
-                    Text("نسخ")
-                }
             }
         }
     }

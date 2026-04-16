@@ -27,17 +27,18 @@ class ApiDocumentationGenerator @Inject constructor(
 
     /** يولّد نص الدوكيومنتيشن الكامل للغة المطلوبة */
     fun generate(lang: DocLanguage): String {
-        val url = securityManager.buildDirectApiUrl() ?: "http://PHONE_IP:8080/api/v1"
+        val relayUrl = securityManager.getRelayUrl() ?: "wss://YOUR-RELAY-URL.hf.space/device"
+        val apiUrl = relayUrl.replace("wss://", "https://").replace("/device", "/api/v1")
         val key = securityManager.getApiKey()
         return when (lang) {
-            DocLanguage.CURL       -> buildCurl(url, key)
-            DocLanguage.JAVASCRIPT -> buildJs(url, key)
-            DocLanguage.PYTHON     -> buildPython(url, key)
-            DocLanguage.PHP        -> buildPhp(url, key)
-            DocLanguage.KOTLIN     -> buildKotlin(url, key)
-            DocLanguage.JAVA       -> buildJava(url, key)
-            DocLanguage.DART       -> buildDart(url, key)
-            DocLanguage.CSHARP     -> buildCsharp(url, key)
+            DocLanguage.CURL       -> buildCurl(apiUrl, key)
+            DocLanguage.JAVASCRIPT -> buildJs(apiUrl, key)
+            DocLanguage.PYTHON     -> buildPython(apiUrl, key)
+            DocLanguage.PHP        -> buildPhp(apiUrl, key)
+            DocLanguage.KOTLIN     -> buildKotlin(apiUrl, key)
+            DocLanguage.JAVA       -> buildJava(apiUrl, key)
+            DocLanguage.DART       -> buildDart(apiUrl, key)
+            DocLanguage.CSHARP     -> buildCsharp(apiUrl, key)
         }
     }
 

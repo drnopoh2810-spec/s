@@ -19,9 +19,8 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val pendingTransactionDao: PendingTransactionDao,
     private val smsLogDao: SmsLogDao,
-    private val directConnectionManager: DirectConnectionManager,
-    private val connectionMonitor: ConnectionMonitor,
-    private val externalAccessManager: ExternalAccessManager
+    private val relayClient: RelayClient,
+    private val connectionMonitor: ConnectionMonitor
 ) : ViewModel() {
 
     val pendingTransactions: StateFlow<List<PendingTransaction>> = 
@@ -41,36 +40,28 @@ class DashboardViewModel @Inject constructor(
                 initialValue = emptyList()
             )
 
-    // معلومات الاتصال المباشر المحدثة
-    val connectionInfo: StateFlow<ConnectionInfo> = combine(
-        directConnectionManager.isActive,
-        directConnectionManager.connectionUrl,
-        directConnectionManager.connectedClients,
-        directConnectionManager.connectionUrls,
-        directConnectionManager.networkInfo
-    ) { isActive, url, clients, urls, networkInfo ->
-        ConnectionInfo(
-            isActive = isActive,
-            connectionUrl = url ?: "غير متاح",
-            connectedClients = clients.size,
-            clientsList = clients.toList(),
-            availableUrls = urls,
-            networkInfo = networkInfo,
-            bestUrl = directConnectionManager.getBestConnectionUrl(),
-            isPublicAccessible = networkInfo?.isPublicAccessible ?: false
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ConnectionInfo()
-    )
+    // معلومات الاتصال عبر Relay
+    private val _connectionInfo = MutableStateFlow(ConnectionInfo())
+    val connectionInfo: StateFlow<ConnectionInfo> = _connectionInfo.asStateFlow()
 
-    // معلومات الوصول الخارجي
-    val externalAccessInfo = externalAccessManager.externalAccessInfo.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
+    init {
+        // تحديث معلومات الاتصال دورياً
+        viewModelScope.launch {
+            while (true) {
+                updateConnectionInfo()
+                delay(5000) // كل 5 ثواني
+            }
+        }
+    }
+
+    private fun updateConnectionInfo() {
+        _connectionInfo.value = ConnectionInfo(
+            isActive = relayClient.isConnected(),
+            connectionUrl = "Huggingface Relay",
+            connectedClients = if (relayClient.isConnected()) 1 else 0,
+            clientsList = if (relayClient.isConnected()) listOf("Relay Server") else emptyList()
+        )
+    }
 
     val stats: StateFlow<DashboardStats> = combine(
         pendingTransactionDao.getPendingTransactions(),
@@ -95,31 +86,15 @@ class DashboardViewModel @Inject constructor(
     )
 
     /**
-     * إعادة تشغيل الاتصال المباشر
+     * إعادة تشغيل الاتصال بـ Relay
      */
     fun restartConnection() {
         viewModelScope.launch {
-            connectionMonitor.forceRestart()
+            relayClient.disconnect()
+            delay(1000)
+            relayClient.connect()
+            updateConnectionInfo()
         }
-    }
-
-    /**
-     * تحليل إمكانيات الوصول الخارجي
-     */
-    fun analyzeExternalAccess() {
-        viewModelScope.launch {
-            externalAccessManager.analyzeExternalAccess()
-        }
-    }
-
-    /**
-     * الحصول على دليل الإعداد
-     */
-    fun getSetupGuide(method: ExternalAccessManager.AccessMethod): String? {
-        val networkInfo = directConnectionManager.networkInfo.value
-        return if (networkInfo != null) {
-            externalAccessManager.generateSetupGuide(method, networkInfo)
-        } else null
     }
 }
 
@@ -137,9 +112,5 @@ data class ConnectionInfo(
     val isActive: Boolean = false,
     val connectionUrl: String = "غير متاح",
     val connectedClients: Int = 0,
-    val clientsList: List<String> = emptyList(),
-    val availableUrls: List<NetworkDetector.ConnectionUrl> = emptyList(),
-    val networkInfo: NetworkDetector.NetworkInfo? = null,
-    val bestUrl: String? = null,
-    val isPublicAccessible: Boolean = false
+    val clientsList: List<String> = emptyList()
 )
