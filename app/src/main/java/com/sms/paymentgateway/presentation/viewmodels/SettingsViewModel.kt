@@ -30,8 +30,11 @@ class SettingsViewModel @Inject constructor(
     private val _webhookUrl     = MutableStateFlow(securityManager.getWebhookUrl() ?: "")
     val webhookUrl: StateFlow<String> = _webhookUrl.asStateFlow()
 
-    private val _relayUrl       = MutableStateFlow(securityManager.getRelayUrl() ?: "")
+    private val _relayUrl       = MutableStateFlow(securityManager.getRelayUrl())
     val relayUrl: StateFlow<String> = _relayUrl.asStateFlow()
+
+    private val _isDefaultRelay = MutableStateFlow(securityManager.isUsingDefaultRelayUrl())
+    val isDefaultRelay: StateFlow<Boolean> = _isDefaultRelay.asStateFlow()
 
     private val _relayConnected = MutableStateFlow(relayClient.isConnected())
     val relayConnected: StateFlow<Boolean> = _relayConnected.asStateFlow()
@@ -57,15 +60,22 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateRelayUrl(url: String) = viewModelScope.launch {
-        if (url.isBlank()) {
-            securityManager.clearRelayUrl()
-            relayClient.stop()
-        } else {
-            securityManager.setRelayUrl(url)
-            relayClient.stop()
-            relayClient.start()
-        }
-        _relayUrl.value = url
+        val trimmed = url.trim()
+        securityManager.setRelayUrl(trimmed)      // setRelayUrl تحذف المخصص إذا كان مطابقاً للافتراضي أو فارغاً
+        relayClient.stop()
+        relayClient.start()
+        _relayUrl.value = securityManager.getRelayUrl()
+        _isDefaultRelay.value = securityManager.isUsingDefaultRelayUrl()
+        _relayConnected.value = relayClient.isConnected()
+        _connectionCard.value = securityManager.buildConnectionCard()
+    }
+
+    fun resetRelayUrlToDefault() = viewModelScope.launch {
+        securityManager.clearRelayUrl()
+        relayClient.stop()
+        relayClient.start()
+        _relayUrl.value = securityManager.getRelayUrl()
+        _isDefaultRelay.value = true
         _relayConnected.value = relayClient.isConnected()
         _connectionCard.value = securityManager.buildConnectionCard()
     }
