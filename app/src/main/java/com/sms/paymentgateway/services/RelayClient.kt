@@ -1,6 +1,7 @@
 package com.sms.paymentgateway.services
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -20,7 +21,7 @@ import javax.inject.Singleton
 
 @Singleton
 class RelayClient @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val securityManager: SecurityManager
 ) {
     private val TAG = "RelayClient"
