@@ -258,7 +258,7 @@ class CloudflareTunnelManager @Inject constructor(
      */
     fun restart(method: TunnelMethod = TunnelMethod.SERVEO, localPort: Int = 8080) {
         stop()
-        delay(1000)
+        Thread.sleep(1000)
         when (method) {
             TunnelMethod.SERVEO -> startServeoTunnel(localPort)
             TunnelMethod.CLOUDFLARED -> startCloudflaredTunnel(localPort)
