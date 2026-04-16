@@ -1,13 +1,15 @@
 package com.sms.paymentgateway.presentation.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.os.Environment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -22,11 +24,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.sms.paymentgateway.presentation.ui.copyToClipboardWithFeedback
+import com.sms.paymentgateway.presentation.ui.shareText
 import com.sms.paymentgateway.presentation.viewmodels.SettingsViewModel
 import com.sms.paymentgateway.services.DocLanguage
 import com.sms.paymentgateway.utils.security.ConnectionCard
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +50,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     var showCardDialog    by remember { mutableStateOf(false) }
     var showDocDialog     by remember { mutableStateOf(false) }
     var downloadMessage   by remember { mutableStateOf<String?>(null) }
-    
+
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -67,21 +71,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
 
-            // ─── بطاقة الاتصال المباشر ─────────────────────────────────────
-            item {
-                SectionTitle(title = "🔗 رابط الاتصال المباشر")
-            }
+            // ─── بطاقة الاتصال المباشر ───────────────────────────────────
+            item { SectionTitle(title = "🔗 رابط الاتصال المباشر") }
 
             item {
                 ConnectionCardWidget(
                     card = connectionCard,
                     relayConnected = relayConnected,
-                    onCopy = { text -> copyToClipboard(context, "رابط API", text) },
+                    onCopy  = { text, label -> copyToClipboardWithFeedback(context, label, text) },
+                    onShare = { text, label -> shareText(context, label, text) },
                     onShowDetails = { showCardDialog = true }
                 )
             }
 
-            // ─── مفتاح API ─────────────────────────────────────────────────
+            // ─── مفتاح API ───────────────────────────────────────────────
             item { SectionTitle(title = "🔑 مفتاح API") }
 
             item {
@@ -93,35 +96,61 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text("مفتاح API", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "${apiKey.take(16)}…",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace
-                            )
+                            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                                Text(
+                                    "${apiKey.take(24)}…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
                         }
                         Row {
-                            IconButton(onClick = { copyToClipboard(context, "مفتاح API", apiKey) }) {
-                                Icon(Icons.Default.Share, "نسخ")
+                            // زر النسخ بأيقونة صحيحة
+                            IconButton(onClick = {
+                                copyToClipboardWithFeedback(context, "مفتاح API", apiKey)
+                            }) {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    contentDescription = "نسخ مفتاح API",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
+                            // زر المشاركة
+                            IconButton(onClick = {
+                                shareText(context, "مفتاح API", apiKey)
+                            }) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = "مشاركة مفتاح API",
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                            // زر التجديد
                             IconButton(onClick = { showApiKeyDialog = true }) {
-                                Icon(Icons.Default.Refresh, "تجديد")
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "تجديد المفتاح",
+                                    tint = MaterialTheme.colorScheme.tertiary
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // ─── Relay Server ───────────────────────────────────────────────
+            // ─── Relay Server ─────────────────────────────────────────────
             item { SectionTitle(title = "🌐 خادم الوسيط (Relay Server)") }
 
             item {
-                SettingsCard(onClick = {
-                    viewModel.refreshRelayStatus()
-                    showRelayDialog = true
-                }, containerColor = if (relayConnected)
-                    MaterialTheme.colorScheme.primaryContainer
-                else
-                    MaterialTheme.colorScheme.surfaceVariant
+                SettingsCard(
+                    onClick = {
+                        viewModel.refreshRelayStatus()
+                        showRelayDialog = true
+                    },
+                    containerColor = if (relayConnected)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -152,7 +181,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 }
             }
 
-            // ─── Webhook ────────────────────────────────────────────────────
+            // ─── Webhook ──────────────────────────────────────────────────
             item { SectionTitle(title = "📬 Webhook (إشعار تأكيد الدفع)") }
 
             item {
@@ -169,12 +198,25 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        Icon(Icons.Default.Edit, "تعديل")
+                        Row {
+                            if (webhookUrl.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    copyToClipboardWithFeedback(context, "رابط Webhook", webhookUrl)
+                                }) {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        contentDescription = "نسخ Webhook",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Icon(Icons.Default.Edit, "تعديل")
+                        }
                     }
                 }
             }
 
-            // ─── API Documentation Download ──────────────────────────────────
+            // ─── API Documentation Download ───────────────────────────────
             item { SectionTitle(title = "📚 تحميل الدوكيومنتيشن") }
 
             item {
@@ -190,19 +232,29 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                                 "حمّل أمثلة الكود بـ 8 لغات برمجة",
                                 style = MaterialTheme.typography.bodySmall
                             )
+                            // مسار التخزين
+                            Text(
+                                "📁 مسار الحفظ: Downloads/SMS-Gateway/",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
-                        Icon(Icons.Default.Info, "تحميل")
+                        Icon(Icons.Default.Download, "تحميل")
                     }
                 }
             }
 
-            // عرض رسالة التحميل
+            // رسالة التحميل
             downloadMessage?.let { msg ->
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (msg.startsWith("✅"))
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.errorContainer
                         )
                     ) {
                         Row(
@@ -210,14 +262,25 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             Arrangement.spacedBy(8.dp),
                             Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Check, "نجح", tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                if (msg.startsWith("✅")) Icons.Default.Check else Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = if (msg.startsWith("✅"))
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.error
+                            )
                             Text(msg, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.weight(1f))
+                            IconButton(onClick = { downloadMessage = null }) {
+                                Icon(Icons.Default.Close, "إغلاق")
+                            }
                         }
                     }
                 }
             }
 
-            // ─── IP Whitelist ────────────────────────────────────────────────
+            // ─── IP Whitelist ─────────────────────────────────────────────
             item {
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                     SectionTitle(title = "🔒 قائمة IP المسموح بها")
@@ -247,8 +310,23 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             Alignment.CenterVertically
                         ) {
                             Text(ip, fontFamily = FontFamily.Monospace)
-                            IconButton(onClick = { viewModel.removeIpFromWhitelist(ip) }) {
-                                Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
+                            Row {
+                                IconButton(onClick = {
+                                    copyToClipboardWithFeedback(context, "عنوان IP", ip)
+                                }) {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        contentDescription = "نسخ IP",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.removeIpFromWhitelist(ip) }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "حذف",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                     }
@@ -263,13 +341,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         }
     }
 
-    // ─── Dialogs ─────────────────────────────────────────────────────────────
+    // ─── Dialogs ──────────────────────────────────────────────────────────────
 
     if (showCardDialog && connectionCard != null) {
         ConnectionCardDialog(
             card = connectionCard!!,
             onDismiss = { showCardDialog = false },
-            onCopy = { text, label -> copyToClipboard(context, label, text) }
+            onCopy  = { text, label -> copyToClipboardWithFeedback(context, label, text) },
+            onShare = { text, label -> shareText(context, label, text) }
         )
     }
 
@@ -277,11 +356,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { showApiKeyDialog = false },
             title = { Text("تجديد مفتاح API") },
-            text = { Text("هل أنت متأكد؟ المفتاح القديم سيتوقف عن العمل فوراً.") },
+            text  = { Text("هل أنت متأكد؟ المفتاح القديم سيتوقف عن العمل فوراً.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.regenerateApiKey(); showApiKeyDialog = false }) {
-                    Text("تجديد", color = MaterialTheme.colorScheme.error)
-                }
+                TextButton(onClick = {
+                    viewModel.regenerateApiKey()
+                    showApiKeyDialog = false
+                }) { Text("تجديد", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showApiKeyDialog = false }) { Text("إلغاء") }
@@ -294,7 +374,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { showRelayDialog = false },
             title = { Text("إعداد خادم الوسيط") },
-            text = {
+            text  = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("أدخل رابط WebSocket لخادم الوسيط:", style = MaterialTheme.typography.bodySmall)
                     Text(
@@ -314,9 +394,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.updateRelayUrl(url.trim()); showRelayDialog = false }) {
-                    Text("حفظ والاتصال")
-                }
+                TextButton(onClick = {
+                    viewModel.updateRelayUrl(url.trim())
+                    showRelayDialog = false
+                }) { Text("حفظ والاتصال") }
             },
             dismissButton = {
                 TextButton(onClick = { showRelayDialog = false }) { Text("إلغاء") }
@@ -329,7 +410,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { showWebhookDialog = false },
             title = { Text("رابط Webhook") },
-            text = {
+            text  = {
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
@@ -339,9 +420,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.updateWebhookUrl(url); showWebhookDialog = false }) {
-                    Text("حفظ")
-                }
+                TextButton(onClick = {
+                    viewModel.updateWebhookUrl(url)
+                    showWebhookDialog = false
+                }) { Text("حفظ") }
             },
             dismissButton = {
                 TextButton(onClick = { showWebhookDialog = false }) { Text("إلغاء") }
@@ -354,7 +436,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { showIpDialog = false },
             title = { Text("إضافة عنوان IP") },
-            text = {
+            text  = {
                 OutlinedTextField(
                     value = ip,
                     onValueChange = { ip = it },
@@ -365,7 +447,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (ip.isNotBlank()) { viewModel.addIpToWhitelist(ip); showIpDialog = false }
+                    if (ip.isNotBlank()) {
+                        viewModel.addIpToWhitelist(ip.trim())
+                        showIpDialog = false
+                    }
                 }) { Text("إضافة") }
             },
             dismissButton = {
@@ -375,22 +460,32 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     }
 
     if (showDocDialog) {
+        val scope = rememberCoroutineScope()
         DocumentationDownloadDialog(
-            viewModel = viewModel,
             onDismiss = { showDocDialog = false },
-            onDownloadSuccess = { msg -> downloadMessage = msg },
-            onDownloadError = { msg -> downloadMessage = msg }
+            onDownload = { lang ->
+                scope.launch {
+                    val result = viewModel.downloadDocumentation(lang)
+                    result.onSuccess { file ->
+                        downloadMessage = "✅ تم الحفظ في:\n${file.absolutePath}"
+                        showDocDialog = false
+                    }.onFailure { error ->
+                        downloadMessage = "❌ خطأ: ${error.message}"
+                    }
+                }
+            }
         )
     }
 }
 
-// ─── Connection Card Widget ────────────────────────────────────────────────
+// ─── Connection Card Widget ───────────────────────────────────────────────────
 
 @Composable
 fun ConnectionCardWidget(
     card: ConnectionCard?,
     relayConnected: Boolean,
-    onCopy: (String) -> Unit,
+    onCopy: (String, String) -> Unit,
+    onShare: (String, String) -> Unit,
     onShowDetails: () -> Unit
 ) {
     ElevatedCard(
@@ -429,94 +524,99 @@ fun ConnectionCardWidget(
                     )
                 }
             } else {
-                Text(
-                    "رابط API لموقعك:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                // ── رابط API ──
+                Text("رابط API لموقعك:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surface,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .padding(16.dp),
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
                     Arrangement.SpaceBetween,
                     Alignment.CenterVertically
                 ) {
-                    Text(
-                        card.apiUrl,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { onCopy(card.apiUrl) }) {
-                        Icon(
-                            Icons.Default.Share,
-                            "نسخ",
-                            tint = MaterialTheme.colorScheme.primary
+                    Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                        Text(
+                            card.apiUrl,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace
                         )
+                    }
+                    Row {
+                        IconButton(onClick = { onCopy(card.apiUrl, "رابط API") }) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "نسخ رابط API",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { onShare(card.apiUrl, "رابط API") }) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "مشاركة رابط API",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
                 }
 
-                Text(
-                    "مفتاح API:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                // ── مفتاح API ──
+                Text("مفتاح API:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surface,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .padding(16.dp),
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
                     Arrangement.SpaceBetween,
                     Alignment.CenterVertically
                 ) {
                     Text(
                         "${card.apiKey.take(20)}…",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = { onCopy(card.apiKey) }) {
-                        Icon(
-                            Icons.Default.Share,
-                            "نسخ",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    Row {
+                        IconButton(onClick = { onCopy(card.apiKey, "مفتاح API") }) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "نسخ مفتاح API",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { onShare(card.apiKey, "مفتاح API") }) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "مشاركة مفتاح API",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
                 }
 
                 Button(
                     onClick = onShowDetails,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Icon(Icons.Default.Info, null)
+                    Icon(Icons.Default.Code, null)
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        "عرض أمثلة الكود الكامل",
-                        style = MaterialTheme.typography.titleSmall
-                    )
+                    Text("عرض أمثلة الكود الكامل", style = MaterialTheme.typography.titleSmall)
                 }
             }
         }
     }
 }
 
+// ─── Connection Card Dialog ───────────────────────────────────────────────────
+
 @Composable
 fun ConnectionCardDialog(
     card: ConnectionCard,
     onDismiss: () -> Unit,
-    onCopy: (String, String) -> Unit
+    onCopy: (String, String) -> Unit,
+    onShare: (String, String) -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("cURL", "JavaScript", "PHP")
@@ -533,35 +633,54 @@ fun ConnectionCardDialog(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                // رابط API
                 Text("رابط API:", style = MaterialTheme.typography.labelMedium)
-                CodeBlock(text = card.apiUrl, onCopy = { onCopy(card.apiUrl, "رابط API") })
+                CodeBlock(
+                    text = card.apiUrl,
+                    onCopy  = { onCopy(card.apiUrl, "رابط API") },
+                    onShare = { onShare(card.apiUrl, "رابط API") }
+                )
 
-                // مفتاح API
                 Text("مفتاح API:", style = MaterialTheme.typography.labelMedium)
-                CodeBlock(text = card.apiKey, onCopy = { onCopy(card.apiKey, "مفتاح API") })
+                CodeBlock(
+                    text = card.apiKey,
+                    onCopy  = { onCopy(card.apiKey, "مفتاح API") },
+                    onShare = { onShare(card.apiKey, "مفتاح API") }
+                )
 
-                // Tabs for code examples
                 TabRow(selectedTabIndex = selectedTab) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(title, fontSize = 12.sp) }
+                            onClick  = { selectedTab = index },
+                            text     = { Text(title, fontSize = 12.sp) }
                         )
                     }
                 }
 
                 when (selectedTab) {
                     0 -> {
-                        CodeBlock(text = buildCurlExample(card.apiUrl, card.apiKey), onCopy = { onCopy(buildCurlExample(card.apiUrl, card.apiKey), "مثال cURL") })
+                        val code = buildCurlExample(card.apiUrl, card.apiKey)
+                        CodeBlock(
+                            text = code,
+                            onCopy  = { onCopy(code, "مثال cURL") },
+                            onShare = { onShare(code, "مثال cURL") }
+                        )
                     }
                     1 -> {
-                        CodeBlock(text = buildJsExample(card.apiUrl, card.apiKey), onCopy = { onCopy(buildJsExample(card.apiUrl, card.apiKey), "مثال JavaScript") })
+                        val code = buildJsExample(card.apiUrl, card.apiKey)
+                        CodeBlock(
+                            text = code,
+                            onCopy  = { onCopy(code, "مثال JavaScript") },
+                            onShare = { onShare(code, "مثال JavaScript") }
+                        )
                     }
                     2 -> {
-                        val phpExample = buildPhpExample(card.apiUrl, card.apiKey)
-                        CodeBlock(text = phpExample, onCopy = { onCopy(phpExample, "مثال PHP") })
+                        val code = buildPhpExample(card.apiUrl, card.apiKey)
+                        CodeBlock(
+                            text = code,
+                            onCopy  = { onCopy(code, "مثال PHP") },
+                            onShare = { onShare(code, "مثال PHP") }
+                        )
                     }
                 }
             }
@@ -572,8 +691,10 @@ fun ConnectionCardDialog(
     )
 }
 
+// ─── Code Block Component ─────────────────────────────────────────────────────
+
 @Composable
-private fun CodeBlock(text: String, onCopy: () -> Unit) {
+private fun CodeBlock(text: String, onCopy: () -> Unit, onShare: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -587,53 +708,118 @@ private fun CodeBlock(text: String, onCopy: () -> Unit) {
                 fontFamily = FontFamily.Monospace,
                 color = Color(0xFFD4D4D4),
                 fontSize = 10.sp
-            )
+            ),
+            modifier = Modifier.padding(end = 64.dp)
         )
-        IconButton(
-            onClick = onCopy,
-            modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+        Row(
+            modifier = Modifier.align(Alignment.TopEnd),
+            horizontalArrangement = Arrangement.End
         ) {
-            Icon(Icons.Default.Share, "نسخ", tint = Color.White, modifier = Modifier.size(16.dp))
+            // زر النسخ
+            IconButton(
+                onClick = onCopy,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.ContentCopy,
+                    contentDescription = "نسخ",
+                    tint = Color(0xFFBBBBBB),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            // زر المشاركة
+            IconButton(
+                onClick = onShare,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = "مشاركة",
+                    tint = Color(0xFF88CCFF),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }
 
-private fun buildCurlExample(url: String, key: String) = """
-  curl -X POST "${url}/transactions" \
-    -H "Authorization: Bearer ${key}" \
-    -H "Content-Type: application/json" \
-    -d '{"id":"order-001","amount":500,"phoneNumber":"01012345678"}'
-  """.trimIndent()
+// ─── Documentation Download Dialog ───────────────────────────────────────────
 
-  private fun buildJsExample(url: String, key: String) = """
-  const res = await fetch('${url}/transactions', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ${key}',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({id:'order-001',amount:500,phoneNumber:'01012345678'})
-  });
-  const data = await res.json();
-  """.trimIndent()
+@Composable
+private fun DocumentationDownloadDialog(
+    onDismiss: () -> Unit,
+    onDownload: (DocLanguage) -> Unit
+) {
+    val storagePath = remember {
+        val dir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "SMS-Gateway"
+        )
+        dir.absolutePath
+    }
 
-  private fun buildPhpExample(url: String, key: String): String {
-      val s = "${'$'}"
-      return ("<?php\n" +
-          s + "apiUrl = \"" + url + "\";\n" +
-          s + "apiKey = \"" + key + "\";\n" +
-          s + "data   = ['id'=>'order-1','amount'=>500,'phoneNumber'=>'01012345678'];\n\n" +
-          s + "ctx = stream_context_create(['http'=>[\n" +
-          "  'method'  => 'POST',\n" +
-          "  'header'  => \"Authorization: Bearer \" . " + s + "apiKey . \"\\r\\nContent-Type: application/json\",\n" +
-          "  'content' => json_encode(" + s + "data)\n" +
-          "]]);\n" +
-          s + "response = json_decode(file_get_contents(" + s + "apiUrl . '/transactions', false, " + s + "ctx), true);\n" +
-          "echo \"رقم المعاملة: \" . " + s + "response['transaction']['id'];\n" +
-          "?>")
-  }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("تحميل دليل الاتصال بالـ API", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // مسار الحفظ
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.FolderOpen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Column {
+                            Text(
+                                "مسار حفظ الملفات:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                storagePath,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "اختر لغة البرمجة لتحميل أمثلة الكود الكاملة:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                DocLanguage.values().forEach { lang ->
+                    Button(
+                        onClick = { onDownload(lang) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Download, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("${lang.label}  (.${lang.ext})")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("إغلاق") }
+        }
+    )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun SectionTitle(title: String) {
@@ -661,53 +847,51 @@ private fun SettingsCard(
     }
 }
 
-private fun copyToClipboard(context: Context, label: String, text: String) {
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText(label, text))
-}
+// ─── Code Examples ────────────────────────────────────────────────────────────
 
-// ─── Documentation Download Dialog ───────────────────────────────────────────
-@Composable
-private fun DocumentationDownloadDialog(
-    viewModel: SettingsViewModel,
-    onDismiss: () -> Unit,
-    onDownloadSuccess: (String) -> Unit,
-    onDownloadError: (String) -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("تحميل دليل الاتصال بالـ API", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "اختر لغة البرمجة لتحميل أمثلة الكود الكاملة:",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                
-                DocLanguage.values().forEach { lang ->
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                val result = viewModel.downloadDocumentation(lang)
-                                result.onSuccess { file ->
-                                    onDownloadSuccess("✅ تم الحفظ: ${file.name}")
-                                    onDismiss()
-                                }.onFailure { error ->
-                                    onDownloadError("❌ خطأ: ${error.message}")
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("${lang.label} (.${lang.ext})")
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("إغلاق") }
-        }
-    )
+private fun buildCurlExample(url: String, key: String) = """
+curl -X POST "$url/transactions" \
+  -H "Authorization: Bearer $key" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"order-001","amount":500,"phoneNumber":"01012345678"}'
+""".trimIndent()
+
+private fun buildJsExample(url: String, key: String) = """
+const res = await fetch('$url/transactions', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer $key',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    id: 'order-001',
+    amount: 500,
+    phoneNumber: '01012345678'
+  })
+});
+const data = await res.json();
+console.log(data);
+""".trimIndent()
+
+private fun buildPhpExample(url: String, key: String): String {
+    val s = "$"
+    return """
+<?php
+${s}apiUrl = "$url";
+${s}apiKey = "$key";
+${s}data   = ['id'=>'order-1','amount'=>500,'phoneNumber'=>'01012345678'];
+
+${s}ctx = stream_context_create(['http' => [
+  'method'  => 'POST',
+  'header'  => "Authorization: Bearer " . ${s}apiKey . "\r\nContent-Type: application/json",
+  'content' => json_encode(${s}data)
+]]);
+
+${s}response = json_decode(
+  file_get_contents(${s}apiUrl . '/transactions', false, ${s}ctx),
+  true
+);
+echo "رقم المعاملة: " . ${s}response['transaction']['id'];
+?>
+""".trimIndent()
 }
