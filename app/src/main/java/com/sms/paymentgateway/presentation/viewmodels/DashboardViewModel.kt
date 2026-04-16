@@ -7,6 +7,7 @@ import com.sms.paymentgateway.data.dao.SmsLogDao
 import com.sms.paymentgateway.data.entities.PendingTransaction
 import com.sms.paymentgateway.data.entities.SmsLog
 import com.sms.paymentgateway.services.DirectConnectionManager
+import com.sms.paymentgateway.services.NetworkDetector
 import com.sms.paymentgateway.services.ConnectionMonitor
 import com.sms.paymentgateway.services.ExternalAccessManager
 import dagger.hilt.android.lifecycle.HiltViewModel
