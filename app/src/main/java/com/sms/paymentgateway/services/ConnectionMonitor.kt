@@ -9,41 +9,52 @@ import javax.inject.Singleton
 @Singleton
 class ConnectionMonitor @Inject constructor(
     private val context: Context,
-    private val relayClient: RelayClient
+    private val directConnectionManager: DirectConnectionManager
 ) {
     private val TAG = "ConnectionMonitor"
     private var monitorJob: Job? = null
     private var _monitoring = false
 
     companion object {
-        private const val CHECK_INTERVAL        = 30_000L   // 30 ثانية
-        private const val FORCE_RECONNECT_INTERVAL = 300_000L  // 5 دقائق
+        private const val CHECK_INTERVAL = 30_000L   // 30 ثانية
+        private const val RESTART_INTERVAL = 300_000L  // 5 دقائق
     }
 
     fun startMonitoring() {
         if (_monitoring) return
         _monitoring = true
-        Log.d(TAG, "🔍 بدء مراقبة الاتصال…")
+        Log.d(TAG, "🔍 بدء مراقبة الاتصال المباشر…")
 
         monitorJob = CoroutineScope(Dispatchers.IO).launch {
-            var lastForce = 0L
+            var lastRestart = 0L
             while (_monitoring) {
                 try {
                     val now = System.currentTimeMillis()
-                    if (!relayClient.isConnected() && relayClient.isStarted()) {
-                        Log.w(TAG, "⚠️ انقطع الاتصال، محاولة الاسترداد…")
-                        if (now - lastForce > FORCE_RECONNECT_INTERVAL) {
-                            Log.i(TAG, "🔄 إعادة اتصال قسرية…")
-                            relayClient.disconnect()
+                    
+                    // فحص حالة DirectConnectionManager
+                    if (!directConnectionManager.isActive.value) {
+                        Log.w(TAG, "⚠️ مدير الاتصال المباشر متوقف، محاولة إعادة التشغيل…")
+                        
+                        if (now - lastRestart > RESTART_INTERVAL) {
+                            Log.i(TAG, "🔄 إعادة تشغيل مدير الاتصال المباشر…")
+                            directConnectionManager.stop()
                             delay(2_000)
-                            relayClient.connect()
-                            lastForce = now
+                            directConnectionManager.start()
+                            lastRestart = now
+                        }
+                    } else {
+                        // فحص عدد العملاء المتصلين
+                        val clientCount = directConnectionManager.connectedClients.value.size
+                        Log.d(TAG, "📊 العملاء المتصلين: $clientCount")
+                        
+                        // إرسال heartbeat إذا كان هناك عملاء متصلين
+                        if (clientCount > 0) {
+                            directConnectionManager.broadcastMessage(
+                                """{"type":"heartbeat","timestamp":${System.currentTimeMillis()},"status":"alive"}"""
+                            )
                         }
                     }
-                    if (!relayClient.isStarted()) {
-                        Log.w(TAG, "⚠️ RelayClient متوقف، إعادة تشغيل…")
-                        relayClient.start()
-                    }
+                    
                 } catch (e: Exception) {
                     Log.e(TAG, "خطأ في مراقبة الاتصال: ${e.message}")
                 }
@@ -59,13 +70,27 @@ class ConnectionMonitor @Inject constructor(
         Log.d(TAG, "🛑 توقفت مراقبة الاتصال")
     }
 
-    fun forceReconnect() {
+    fun forceRestart() {
         CoroutineScope(Dispatchers.IO).launch {
-            relayClient.disconnect()
+            Log.i(TAG, "🔄 إعادة تشغيل قسرية لمدير الاتصال المباشر")
+            directConnectionManager.stop()
             delay(1_000)
-            relayClient.connect()
+            directConnectionManager.start()
         }
     }
 
     fun isMonitoring(): Boolean = _monitoring
+
+    /**
+     * الحصول على معلومات الاتصال الحالية
+     */
+    fun getConnectionStatus(): Map<String, Any> {
+        return mapOf(
+            "isActive" to directConnectionManager.isActive.value,
+            "connectionUrl" to (directConnectionManager.connectionUrl.value ?: "غير متاح"),
+            "connectedClients" to directConnectionManager.connectedClients.value.size,
+            "isMonitoring" to _monitoring,
+            "timestamp" to System.currentTimeMillis()
+        )
+    }
 }

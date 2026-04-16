@@ -20,7 +20,7 @@ class PaymentGatewayService : Service() {
 
     @Inject lateinit var apiServer: ApiServer
     @Inject lateinit var cleanupManager: CleanupManager
-    @Inject lateinit var relayClient: RelayClient
+    @Inject lateinit var directConnectionManager: DirectConnectionManager
     @Inject lateinit var connectionMonitor: ConnectionMonitor
 
     private val CHANNEL_ID      = "payment_gateway_channel"
@@ -28,44 +28,66 @@ class PaymentGatewayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Timber.i("🚀 بدء خدمة بوابة الدفع")
+        Timber.i("🚀 بدء خدمة بوابة الدفع - الاتصال المباشر")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
 
-        runCatching { apiServer.start()
-            Timber.i("✅ خادم API يعمل على المنفذ 8080") }
-            .onFailure { Timber.e(it, "❌ فشل تشغيل خادم API") }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching { cleanupManager.startPeriodicCleanup() }
-                .onFailure { Timber.e(it, "❌ فشل تشغيل مدير التنظيف") }
+        // بدء خادم API
+        runCatching { 
+            apiServer.start()
+            Timber.i("✅ خادم API يعمل على المنفذ 8080") 
+        }.onFailure { 
+            Timber.e(it, "❌ فشل تشغيل خادم API") 
         }
 
+        // بدء مدير التنظيف
         CoroutineScope(Dispatchers.IO).launch {
-            runCatching { relayClient.start()
-                Timber.i("✅ عميل Relay يعمل") }
-                .onFailure { Timber.e(it, "❌ فشل تشغيل عميل Relay") }
+            runCatching { 
+                cleanupManager.startPeriodicCleanup() 
+            }.onFailure { 
+                Timber.e(it, "❌ فشل تشغيل مدير التنظيف") 
+            }
         }
 
-        runCatching { connectionMonitor.startMonitoring()
-            Timber.i("✅ مراقبة الاتصال نشطة") }
-            .onFailure { Timber.e(it, "❌ فشل تشغيل مراقبة الاتصال") }
+        // بدء مدير الاتصال المباشر (بدلاً من RelayClient)
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { 
+                directConnectionManager.start()
+                Timber.i("✅ مدير الاتصال المباشر يعمل") 
+            }.onFailure { 
+                Timber.e(it, "❌ فشل تشغيل مدير الاتصال المباشر") 
+            }
+        }
+
+        // بدء مراقبة الاتصال
+        runCatching { 
+            connectionMonitor.startMonitoring()
+            Timber.i("✅ مراقبة الاتصال نشطة") 
+        }.onFailure { 
+            Timber.e(it, "❌ فشل تشغيل مراقبة الاتصال") 
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.i("🔄 إعادة تشغيل الخدمة")
-        if (!relayClient.isStarted()) {
-            CoroutineScope(Dispatchers.IO).launch { relayClient.start() }
+        
+        // التأكد من أن مدير الاتصال المباشر يعمل
+        CoroutineScope(Dispatchers.IO).launch {
+            if (!directConnectionManager.isActive.value) {
+                directConnectionManager.start()
+            }
         }
+        
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Timber.i("🛑 إيقاف خدمة بوابة الدفع")
+        
         runCatching { apiServer.stop() }
         runCatching { cleanupManager.stopCleanup() }
-        runCatching { relayClient.stop() }
+        runCatching { directConnectionManager.stop() }
         runCatching { connectionMonitor.stopMonitoring() }
     }
 
@@ -74,20 +96,25 @@ class PaymentGatewayService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "بوابة دفع SMS",
+                CHANNEL_ID, "بوابة دفع SMS - اتصال مباشر",
                 NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "تشغيل خدمة بوابة الدفع في الخلفية" }
+            ).apply { 
+                description = "تشغيل خدمة بوابة الدفع مع الاتصال المباشر في الخلفية" 
+            }
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
         }
     }
 
-    private fun createNotification(): Notification =
-        NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("بوابة دفع SMS")
-            .setContentText("الخدمة تعمل وتراقب الرسائل")
+    private fun createNotification(): Notification {
+        val connectionUrl = directConnectionManager.connectionUrl.value ?: "جاري التحضير..."
+        
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("بوابة دفع SMS - اتصال مباشر")
+            .setContentText("الخدمة تعمل: $connectionUrl")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
+    }
 }

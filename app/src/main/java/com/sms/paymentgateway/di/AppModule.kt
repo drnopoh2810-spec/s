@@ -8,7 +8,8 @@ import com.sms.paymentgateway.data.AppDatabase
 import com.sms.paymentgateway.data.dao.PendingTransactionDao
 import com.sms.paymentgateway.data.dao.SmsLogDao
 import com.sms.paymentgateway.services.ConnectionMonitor
-import com.sms.paymentgateway.services.RelayClient
+import com.sms.paymentgateway.services.DirectConnectionManager
+import com.sms.paymentgateway.services.WebSocketHandler
 import com.sms.paymentgateway.utils.matcher.TransactionMatcher
 import com.sms.paymentgateway.utils.parser.SmsParser
 import com.sms.paymentgateway.utils.security.RateLimiter
@@ -64,14 +65,31 @@ object AppModule {
     fun provideRateLimiter(): RateLimiter = RateLimiter()
 
     @Provides @Singleton
-    fun provideRelayClient(
+    fun provideNetworkDetector(@ApplicationContext ctx: Context): NetworkDetector = 
+        NetworkDetector(ctx)
+
+    @Provides @Singleton
+    fun provideExternalAccessManager(
         @ApplicationContext ctx: Context,
-        securityManager: SecurityManager
-    ): RelayClient = RelayClient(ctx, securityManager)
+        securityManager: SecurityManager,
+        networkDetector: NetworkDetector
+    ): ExternalAccessManager = ExternalAccessManager(ctx, securityManager, networkDetector)
+
+    @Provides @Singleton
+    fun provideWebSocketHandler(gson: Gson): WebSocketHandler = 
+        WebSocketHandler(gson)
+
+    @Provides @Singleton
+    fun provideDirectConnectionManager(
+        @ApplicationContext ctx: Context,
+        securityManager: SecurityManager,
+        webSocketHandler: WebSocketHandler,
+        networkDetector: NetworkDetector
+    ): DirectConnectionManager = DirectConnectionManager(ctx, securityManager, webSocketHandler, networkDetector)
 
     @Provides @Singleton
     fun provideConnectionMonitor(
         @ApplicationContext ctx: Context,
-        relayClient: RelayClient
-    ): ConnectionMonitor = ConnectionMonitor(ctx, relayClient)
+        directConnectionManager: DirectConnectionManager
+    ): ConnectionMonitor = ConnectionMonitor(ctx, directConnectionManager)
 }

@@ -23,7 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sms.paymentgateway.presentation.viewmodels.SettingsViewModel
+import com.sms.paymentgateway.services.DocLanguage
 import com.sms.paymentgateway.utils.security.ConnectionCard
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +44,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     var showIpDialog      by remember { mutableStateOf(false) }
     var showApiKeyDialog  by remember { mutableStateOf(false) }
     var showCardDialog    by remember { mutableStateOf(false) }
+    var showDocDialog     by remember { mutableStateOf(false) }
+    var downloadMessage   by remember { mutableStateOf<String?>(null) }
+    
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -163,6 +170,49 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             )
                         }
                         Icon(Icons.Default.Edit, "تعديل")
+                    }
+                }
+            }
+
+            // ─── API Documentation Download ──────────────────────────────────
+            item { SectionTitle(title = "📚 تحميل الدوكيومنتيشن") }
+
+            item {
+                SettingsCard(onClick = { showDocDialog = true }) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        Arrangement.SpaceBetween,
+                        Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("دليل الاتصال بالـ API", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "حمّل أمثلة الكود بـ 8 لغات برمجة",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Icon(Icons.Default.Info, "تحميل")
+                    }
+                }
+            }
+
+            // عرض رسالة التحميل
+            downloadMessage?.let { msg ->
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(16.dp),
+                            Arrangement.spacedBy(8.dp),
+                            Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Check, "نجح", tint = MaterialTheme.colorScheme.primary)
+                            Text(msg, style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
             }
@@ -321,6 +371,15 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             dismissButton = {
                 TextButton(onClick = { showIpDialog = false }) { Text("إلغاء") }
             }
+        )
+    }
+
+    if (showDocDialog) {
+        DocumentationDownloadDialog(
+            viewModel = viewModel,
+            onDismiss = { showDocDialog = false },
+            onDownloadSuccess = { msg -> downloadMessage = msg },
+            onDownloadError = { msg -> downloadMessage = msg }
         )
     }
 }
@@ -557,4 +616,50 @@ private fun SettingsCard(
 private fun copyToClipboard(context: Context, label: String, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText(label, text))
+}
+
+// ─── Documentation Download Dialog ───────────────────────────────────────────
+@Composable
+private fun DocumentationDownloadDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+    onDownloadSuccess: (String) -> Unit,
+    onDownloadError: (String) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("تحميل دليل الاتصال بالـ API", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "اختر لغة البرمجة لتحميل أمثلة الكود الكاملة:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                
+                DocLanguage.values().forEach { lang ->
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                val result = viewModel.downloadDocumentation(lang)
+                                result.onSuccess { file ->
+                                    onDownloadSuccess("✅ تم الحفظ: ${file.name}")
+                                    onDismiss()
+                                }.onFailure { error ->
+                                    onDownloadError("❌ خطأ: ${error.message}")
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("${lang.label} (.${lang.ext})")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("إغلاق") }
+        }
+    )
 }

@@ -2,20 +2,26 @@ package com.sms.paymentgateway.presentation.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sms.paymentgateway.services.ApiDocumentationGenerator
+import com.sms.paymentgateway.services.DocLanguage
 import com.sms.paymentgateway.services.RelayClient
 import com.sms.paymentgateway.utils.security.ConnectionCard
 import com.sms.paymentgateway.utils.security.SecurityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val securityManager: SecurityManager,
-    private val relayClient: RelayClient
+    private val relayClient: RelayClient,
+    private val apiDocGenerator: ApiDocumentationGenerator
 ) : ViewModel() {
 
     private val _apiKey         = MutableStateFlow(securityManager.getApiKey())
@@ -81,5 +87,15 @@ class SettingsViewModel @Inject constructor(
     fun clearIpWhitelist() = viewModelScope.launch {
         securityManager.clearIpWhitelist()
         _ipWhitelist.value = emptyList()
+    }
+
+    /** تحميل الدوكيومنتيشن بلغة معينة */
+    suspend fun downloadDocumentation(lang: DocLanguage): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val file = apiDocGenerator.saveToDownloads(lang)
+            Result.success(file)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

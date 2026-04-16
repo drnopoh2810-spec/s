@@ -119,21 +119,6 @@ class SecurityManager @Inject constructor(
     fun setWebhookSecret(secret: String) {
         prefs.edit().putString("webhook_secret", secret).apply()
         Timber.i("Webhook secret updated")
-
-    // Relay Server Configuration
-    fun getRelayUrl(): String? {
-        return prefs.getString("relay_url", null)
-    }
-
-    fun setRelayUrl(url: String) {
-        prefs.edit().putString("relay_url", url).apply()
-        Timber.i("Relay URL updated: $url")
-    }
-
-    fun clearRelayUrl() {
-        prefs.edit().remove("relay_url").apply()
-        Timber.i("Relay URL cleared")
-    }
     }
 
     // Regenerate API Key
@@ -144,18 +129,53 @@ class SecurityManager @Inject constructor(
         return newKey
     }
 
-    // Relay Server Configuration
-    fun getRelayUrl(): String? {
-        return prefs.getString("relay_url", null)
+    // Direct Connection Configuration
+    fun getDirectConnectionUrl(): String? {
+        return prefs.getString("direct_connection_url", null)
     }
 
+    fun setDirectConnectionUrl(url: String) {
+        prefs.edit().putString("direct_connection_url", url).apply()
+        Timber.i("Direct connection URL updated: $url")
+    }
+
+    fun clearDirectConnectionUrl() {
+        prefs.edit().remove("direct_connection_url").apply()
+        Timber.i("Direct connection URL cleared")
+    }
+
+    // Relay URL (kept for compatibility)
+    fun getRelayUrl(): String? = prefs.getString("relay_url", null)
     fun setRelayUrl(url: String) {
         prefs.edit().putString("relay_url", url).apply()
-        Timber.i("Relay URL updated")
     }
-
     fun clearRelayUrl() {
         prefs.edit().remove("relay_url").apply()
-        Timber.i("Relay URL cleared")
+    }
+
+    /** يبني رابط API المباشر من الـ relay أو direct URL */
+    fun buildDirectApiUrl(): String? {
+        val direct = getDirectConnectionUrl()
+        if (!direct.isNullOrBlank()) return direct.removeSuffix("/connect").let {
+            if (it.contains("/api/v1")) it else "$it/api/v1"
+        }
+        val relay = getRelayUrl() ?: return null
+        return relay
+            .replace("wss://", "https://")
+            .replace("ws://", "http://")
+            .removeSuffix("/device")
+            .let { "$it/api/v1" }
+    }
+
+    /** يبني بطاقة الاتصال الكاملة */
+    fun buildConnectionCard(): ConnectionCard? {
+        val apiUrl = buildDirectApiUrl() ?: return null
+        val key    = getApiKey()
+        return ConnectionCard(apiUrl = apiUrl, apiKey = key)
     }
 }
+
+data class ConnectionCard(
+    val apiUrl: String,
+    val apiKey: String
+)

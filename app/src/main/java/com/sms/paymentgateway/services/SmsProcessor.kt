@@ -19,7 +19,9 @@ class SmsProcessor @Inject constructor(
     private val transactionMatcher: TransactionMatcher,
     private val smsLogDao: SmsLogDao,
     private val pendingTransactionDao: PendingTransactionDao,
-    private val webhookClient: WebhookClient
+    private val webhookClient: WebhookClient,
+    private val directConnectionManager: DirectConnectionManager,
+    private val webSocketHandler: WebSocketHandler
 ) {
 
     suspend fun processSms(sender: String, message: String) {
@@ -31,10 +33,16 @@ class SmsProcessor @Inject constructor(
         if (parsedData == null) {
             Timber.w("Could not parse SMS from $sender")
             saveSmsLog(sender, message, null, false, false)
+            
+            // إشعار استقبال SMS غير مُحلل
+            webSocketHandler.onSmsReceived(sender, false)
             return
         }
 
         Timber.d("Parsed SMS: $parsedData")
+        
+        // إشعار استقبال SMS مُحلل
+        webSocketHandler.onSmsReceived(sender, true, parsedData.walletType.name)
         
         // Save to database
         val smsLogId = saveSmsLog(
@@ -70,7 +78,30 @@ class SmsProcessor @Inject constructor(
                 ))
             }
 
-            // Send webhook notification
+            // إشعار تحديث حالة المعاملة
+            webSocketHandler.onTransactionStatusUpdated(
+                matchResult.transaction.id, 
+                "MATCHED", 
+                matchResult.confidence
+            )
+
+            // إرسال إشعار الدفعة المؤكدة عبر الاتصال المباشر
+            val smsData = mapOf(
+                "walletType" to parsedData.walletType.name,
+                "walletTxId" to (parsedData.transactionId ?: ""),
+                "amount" to (parsedData.amount ?: 0.0),
+                "senderPhone" to (parsedData.senderPhone ?: ""),
+                "receiverPhone" to (parsedData.receiverPhone ?: ""),
+                "timestamp" to System.currentTimeMillis(),
+                "confidence" to matchResult.confidence
+            )
+            
+            directConnectionManager.sendPaymentConfirmation(
+                matchResult.transaction.id,
+                smsData
+            )
+
+            // Send webhook notification (للتوافق مع الأنظمة القديمة)
             webhookClient.sendPaymentConfirmation(
                 transactionId = matchResult.transaction.id,
                 parsedData = parsedData,
