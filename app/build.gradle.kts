@@ -30,7 +30,7 @@ import java.util.Properties
                   ?: localProperties.getProperty("RELAY_API_KEY")
                   ?: "default_api_key_for_development"
 
-          buildConfigField("String", "RELAY_API_KEY", "\"\$relayApiKey\"")
+          buildConfigField("String", "RELAY_API_KEY", "\"$relayApiKey\"")
       }
 
       buildTypes {
@@ -57,7 +57,6 @@ import java.util.Properties
           buildConfig = true
       }
 
-      // Compose Compiler 1.5.8 compatible with Kotlin 1.9.22
       composeOptions {
           kotlinCompilerExtensionVersion = "1.5.8"
       }
@@ -84,10 +83,9 @@ import java.util.Properties
       debugImplementation("androidx.compose.ui:ui-tooling")
 
       // Room - using KSP instead of kapt
-      val roomVersion = "2.6.1"
-      implementation("androidx.room:room-runtime:\$roomVersion")
-      implementation("androidx.room:room-ktx:\$roomVersion")
-      ksp("androidx.room:room-compiler:\$roomVersion")
+      implementation("androidx.room:room-runtime:2.6.1")
+      implementation("androidx.room:room-ktx:2.6.1")
+      ksp("androidx.room:room-compiler:2.6.1")
 
       // Retrofit & OkHttp
       implementation("com.squareup.retrofit2:retrofit:2.9.0")
