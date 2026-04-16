@@ -40,6 +40,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val webhookUrl      by viewModel.webhookUrl.collectAsState()
     val relayUrl        by viewModel.relayUrl.collectAsState()
     val relayConnected  by viewModel.relayConnected.collectAsState()
+    val isDefaultRelay  by viewModel.isDefaultRelay.collectAsState()
     val ipWhitelist     by viewModel.ipWhitelist.collectAsState()
     val connectionCard  by viewModel.connectionCard.collectAsState()
 
@@ -160,7 +161,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("رابط خادم الوسيط", style = MaterialTheme.typography.titleMedium)
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Badge(
                                     containerColor = if (relayConnected) Color(0xFF2E7D32) else Color(0xFFB71C1C)
                                 ) {
@@ -169,11 +170,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                                         color = Color.White
                                     )
                                 }
+                                if (isDefaultRelay) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Badge(containerColor = Color(0xFF1565C0)) {
+                                        Text("افتراضي", color = Color.White)
+                                    }
+                                }
                             }
                             Text(
-                                relayUrl.ifEmpty { "لم يُضبط بعد — اضغط للإعداد" },
+                                relayUrl,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2
                             )
                         }
                         Icon(Icons.Default.Edit, "تعديل")
@@ -370,27 +378,58 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     }
 
     if (showRelayDialog) {
+        val defaultUrl = com.sms.paymentgateway.utils.security.SecurityManager.DEFAULT_RELAY_URL
         var url by remember { mutableStateOf(relayUrl) }
         AlertDialog(
             onDismissRequest = { showRelayDialog = false },
             title = { Text("إعداد خادم الوسيط") },
             text  = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("أدخل رابط WebSocket لخادم الوسيط:", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        "مثال: wss://your-relay.replit.app/device",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // معلومة الرابط الافتراضي
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "الرابط الافتراضي:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                                Text(
+                                    defaultUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = url,
                         onValueChange = { url = it },
                         label = { Text("رابط WebSocket") },
-                        placeholder = { Text("wss://your-relay.replit.app/device") },
-                        singleLine = true,
+                        placeholder = { Text(defaultUrl) },
+                        singleLine = false,
+                        maxLines = 3,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // زر استعادة الافتراضي
+                    if (url != defaultUrl) {
+                        TextButton(
+                            onClick = { url = defaultUrl },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("استعادة الرابط الافتراضي")
+                        }
+                    }
                 }
             },
             confirmButton = {
