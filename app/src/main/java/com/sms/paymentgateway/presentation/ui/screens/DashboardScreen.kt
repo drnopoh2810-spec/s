@@ -19,9 +19,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.sms.paymentgateway.data.entities.PendingTransaction
 import com.sms.paymentgateway.data.entities.SmsLog
 import com.sms.paymentgateway.data.entities.TransactionStatus
+import com.sms.paymentgateway.data.repository.DashboardAnalytics
 import com.sms.paymentgateway.presentation.viewmodels.DashboardViewModel
 import com.sms.paymentgateway.presentation.viewmodels.ConnectionInfo
 import com.sms.paymentgateway.services.NetworkDetector
+import com.sms.paymentgateway.services.SmartTunnelManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,9 +50,15 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // معلومات الاتصال عبر Relay
-            item { 
-                Text("🔗 حالة الاتصال - Huggingface Relay", style = MaterialTheme.typography.headlineSmall) 
+            // ─── بطاقة الرابط العام (SmartTunnel) ───────────────────────────
+            item {
+                Text("🌐 الرابط العام", style = MaterialTheme.typography.headlineSmall)
+            }
+            item {
+                SmartTunnelCard(
+                    tunnelState = viewModel.tunnelState.collectAsState().value,
+                    clipboardManager = LocalClipboardManager.current
+                )
             }
             
             item {
@@ -121,6 +129,16 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
             } else {
                 items(recentSms) { sms -> SmsLogCard(sms) }
             }
+            
+            // قسم التحليلات
+            item {
+                Text(
+                    "📊 تحليلات اليوم",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            item { AnalyticsSection(analytics = viewModel.analytics.collectAsState().value) }
         }
     }
 }
@@ -479,5 +497,248 @@ fun getAccessibilityArabic(level: NetworkDetector.AccessibilityLevel): String {
         NetworkDetector.AccessibilityLevel.PUBLIC_READY -> "جاهز للعموم ✅"
         NetworkDetector.AccessibilityLevel.REQUIRES_SETUP -> "يحتاج إعداد ⚙️"
         NetworkDetector.AccessibilityLevel.UNKNOWN -> "غير معروف"
+    }
+}
+
+@Composable
+fun AnalyticsSection(analytics: DashboardAnalytics?) {
+    if (analytics == null) {
+        Card(Modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth().padding(24.dp), Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // SMS Analytics
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("📩 إحصائيات الرسائل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    AnalyticItem("إجمالي", analytics.sms.total.toString())
+                    AnalyticItem("محللة", analytics.sms.parsed.toString())
+                    AnalyticItem("مطابقة", analytics.sms.matched.toString())
+                    AnalyticItem("نسبة التحليل", "%.0f%%".format(analytics.sms.parseRate))
+                }
+                if (analytics.sms.byWallet.isNotEmpty()) {
+                    Text("توزيع المحافظ:", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    analytics.sms.byWallet.entries.sortedByDescending { it.value }.take(4).forEach { (wallet, count) ->
+                        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                            Text(wallet, style = MaterialTheme.typography.bodySmall)
+                            Text(count.toString(), style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Transaction Analytics
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("💰 إحصائيات المعاملات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    AnalyticItem("إجمالي", analytics.transactions.total.toString())
+                    AnalyticItem("مطابقة", analytics.transactions.matched.toString())
+                    AnalyticItem("منتهية", analytics.transactions.expired.toString())
+                    AnalyticItem("معلقة", analytics.transactions.pending.toString())
+                }
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    AnalyticItem("إجمالي المبالغ", "%.0f ج".format(analytics.transactions.totalAmount))
+                    AnalyticItem("متوسط الثقة", "%.0f%%".format(analytics.transactions.avgConfidence))
+                }
+            }
+        }
+
+        // Webhook Analytics
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("🔔 إحصائيات Webhook", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    AnalyticItem("إجمالي", analytics.webhooks.total.toString())
+                    AnalyticItem("ناجح", analytics.webhooks.success.toString())
+                    AnalyticItem("فاشل", analytics.webhooks.failed.toString())
+                    AnalyticItem("نسبة النجاح", "%.0f%%".format(analytics.webhooks.successRate))
+                }
+                if (analytics.webhooks.avgProcessingTimeMs > 0) {
+                    Text(
+                        "متوسط وقت المعالجة: %.0f ms".format(analytics.webhooks.avgProcessingTimeMs),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AnalyticItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ─── SmartTunnel Card ────────────────────────────────────────────────────────
+
+@Composable
+fun SmartTunnelCard(
+    tunnelState: SmartTunnelManager.TunnelState,
+    clipboardManager: ClipboardManager
+) {
+    val isActive = tunnelState.status == SmartTunnelManager.TunnelStatus.ACTIVE
+    val isConnecting = tunnelState.status == SmartTunnelManager.TunnelStatus.CONNECTING ||
+                       tunnelState.status == SmartTunnelManager.TunnelStatus.RECONNECTING
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = when {
+                isActive -> MaterialTheme.colorScheme.primaryContainer
+                isConnecting -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.errorContainer
+            }
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = when {
+                            isActive -> "🟢"
+                            isConnecting -> "🟡"
+                            else -> "🔴"
+                        },
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Column {
+                        Text(
+                            text = "SmartTunnel",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = when (tunnelState.status) {
+                                SmartTunnelManager.TunnelStatus.ACTIVE -> "نشط ✓"
+                                SmartTunnelManager.TunnelStatus.CONNECTING -> "جاري الاتصال..."
+                                SmartTunnelManager.TunnelStatus.RECONNECTING -> "إعادة الاتصال..."
+                                SmartTunnelManager.TunnelStatus.CONNECTED -> "متصل، جاري التسجيل..."
+                                SmartTunnelManager.TunnelStatus.ERROR -> "خطأ"
+                                SmartTunnelManager.TunnelStatus.DISCONNECTED -> "غير متصل"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (isConnecting) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
+            }
+
+            // الرابط العام
+            if (isActive && tunnelState.publicUrl != null) {
+                HorizontalDivider()
+
+                Text(
+                    text = "رابطك العام:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // الرابط مع زر نسخ
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = tunnelState.publicUrl!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2
+                        )
+                        IconButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(tunnelState.publicUrl!!))
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.AccountBox,
+                                contentDescription = "نسخ الرابط",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                // مثال الاستخدام
+                Text(
+                    text = "مثال: POST ${tunnelState.publicUrl}/api/v1/transactions",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+
+                // إحصائيات
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "طلبات معالجة: ${tunnelState.requestsHandled}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    tunnelState.relayServer?.let {
+                        Text(
+                            text = "عبر: $it",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else if (!isActive && !isConnecting) {
+                // رسالة عند عدم الاتصال
+                Text(
+                    text = tunnelState.error ?: "التطبيق يحاول الاتصال تلقائياً...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (isConnecting) {
+                Text(
+                    text = "جاري إنشاء رابطك العام...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

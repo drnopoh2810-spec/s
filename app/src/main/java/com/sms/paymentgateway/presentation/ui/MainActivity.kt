@@ -40,6 +40,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var securityManager: SecurityManager
+    @Inject lateinit var batteryOptimizationManager: com.sms.paymentgateway.utils.BatteryOptimizationManager
 
     companion object {
         private const val PREFS_NAME    = "app_prefs"
@@ -175,6 +176,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startGatewayService() {
+        // التحقق من Battery Optimization
+        if (!batteryOptimizationManager.isBatteryOptimizationDisabled()) {
+            Toast.makeText(
+                this,
+                "⚠️ يُنصح بإيقاف Battery Optimization للحصول على أفضل أداء",
+                Toast.LENGTH_LONG
+            ).show()
+            Timber.w("Battery optimization is enabled - service may be killed")
+        }
+        
         val intent = Intent(this, PaymentGatewayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
         else startService(intent)
@@ -183,8 +194,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openBatterySettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            batteryOptimizationManager.requestBatteryOptimizationExemption()
+        } else {
+            Toast.makeText(this, "لا حاجة لهذا الإعداد في هذا الإصدار", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    /**
+     * فتح إعدادات Auto-Start
+     */
+    private fun openAutoStartSettings() {
+        batteryOptimizationManager.openAutoStartSettings()
     }
 }
 

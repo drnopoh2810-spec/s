@@ -6,6 +6,8 @@ import com.sms.paymentgateway.data.dao.PendingTransactionDao
 import com.sms.paymentgateway.data.dao.SmsLogDao
 import com.sms.paymentgateway.data.entities.PendingTransaction
 import com.sms.paymentgateway.data.entities.SmsLog
+import com.sms.paymentgateway.data.repository.AnalyticsRepository
+import com.sms.paymentgateway.data.repository.DashboardAnalytics
 import com.sms.paymentgateway.services.RelayClient
 import com.sms.paymentgateway.services.ConnectionMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,7 +21,9 @@ class DashboardViewModel @Inject constructor(
     private val pendingTransactionDao: PendingTransactionDao,
     private val smsLogDao: SmsLogDao,
     private val relayClient: RelayClient,
-    private val connectionMonitor: ConnectionMonitor
+    private val connectionMonitor: ConnectionMonitor,
+    private val analyticsRepository: AnalyticsRepository,
+    private val smartTunnelManager: com.sms.paymentgateway.services.SmartTunnelManager
 ) : ViewModel() {
 
     val pendingTransactions: StateFlow<List<PendingTransaction>> = 
@@ -32,24 +36,35 @@ class DashboardViewModel @Inject constructor(
 
     val recentSmsLogs: StateFlow<List<SmsLog>> = 
         smsLogDao.getAllLogs()
-            .map { it.take(10) } // Last 10 SMS
+            .map { it.take(10) }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = emptyList()
             )
 
-    // معلومات الاتصال عبر Relay
     private val _connectionInfo = MutableStateFlow(ConnectionInfo())
     val connectionInfo: StateFlow<ConnectionInfo> = _connectionInfo.asStateFlow()
 
+    private val _analytics = MutableStateFlow<DashboardAnalytics?>(null)
+    val analytics: StateFlow<DashboardAnalytics?> = _analytics.asStateFlow()
+
+    /** حالة SmartTunnel - الرابط العام */
+    val tunnelState = smartTunnelManager.state
+
     init {
-        // تحديث معلومات الاتصال دورياً
         viewModelScope.launch {
             while (true) {
                 updateConnectionInfo()
-                delay(5000) // كل 5 ثواني
+                refreshAnalytics()
+                delay(30_000L) // كل 30 ثانية
             }
+        }
+    }
+
+    fun refreshAnalytics() {
+        viewModelScope.launch {
+            _analytics.value = analyticsRepository.getDashboardAnalytics()
         }
     }
 
@@ -84,9 +99,6 @@ class DashboardViewModel @Inject constructor(
         initialValue = DashboardStats()
     )
 
-    /**
-     * إعادة تشغيل الاتصال بـ Relay
-     */
     fun restartConnection() {
         viewModelScope.launch {
             relayClient.disconnect()

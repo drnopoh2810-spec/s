@@ -33,13 +33,28 @@ object AppModule {
 
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext ctx: Context): AppDatabase =
-        Room.databaseBuilder(ctx, AppDatabase::class.java, "payment_gateway_db").build()
+        Room.databaseBuilder(ctx, AppDatabase::class.java, "payment_gateway_db")
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3,
+                AppDatabase.MIGRATION_3_4
+            )
+            .build()
 
     @Provides @Singleton
     fun provideSmsLogDao(db: AppDatabase): SmsLogDao = db.smsLogDao()
 
     @Provides @Singleton
     fun providePendingTransactionDao(db: AppDatabase): PendingTransactionDao = db.pendingTransactionDao()
+
+    @Provides @Singleton
+    fun provideWebhookLogDao(db: AppDatabase) = db.webhookLogDao()
+
+    @Provides @Singleton
+    fun provideDeviceDao(db: AppDatabase) = db.deviceDao()
+
+    @Provides @Singleton
+    fun provideSmsTemplateDao(db: AppDatabase) = db.smsTemplateDao()
 
     @Provides @Singleton
     fun provideSmsParser(): SmsParser = SmsParser()
@@ -63,6 +78,10 @@ object AppModule {
     @Provides @Singleton
     fun provideSecurityManager(@ApplicationContext ctx: Context): SecurityManager =
         SecurityManager(ctx)
+
+    @Provides @Singleton
+    fun provideEncryptionManager(@ApplicationContext ctx: Context): com.sms.paymentgateway.utils.security.EncryptionManager =
+        com.sms.paymentgateway.utils.security.EncryptionManager(ctx)
 
     @Provides @Singleton
     fun provideRateLimiter(): RateLimiter = RateLimiter()
@@ -101,4 +120,11 @@ object AppModule {
         @ApplicationContext ctx: Context,
         securityManager: SecurityManager
     ): RelayClient = RelayClient(ctx, securityManager)
+
+    @Provides @Singleton
+    fun provideSmartTunnelManager(
+        @ApplicationContext ctx: Context,
+        securityManager: SecurityManager
+    ): com.sms.paymentgateway.services.SmartTunnelManager =
+        com.sms.paymentgateway.services.SmartTunnelManager(ctx, securityManager)
 }

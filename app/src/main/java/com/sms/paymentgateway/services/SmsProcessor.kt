@@ -21,7 +21,8 @@ class SmsProcessor @Inject constructor(
     private val pendingTransactionDao: PendingTransactionDao,
     private val webhookClient: WebhookClient,
     private val directConnectionManager: DirectConnectionManager,
-    private val webSocketHandler: WebSocketHandler
+    private val webSocketHandler: WebSocketHandler,
+    private val encryptionManager: com.sms.paymentgateway.utils.security.EncryptionManager
 ) {
 
     suspend fun processSms(sender: String, message: String) {
@@ -96,9 +97,25 @@ class SmsProcessor @Inject constructor(
                 "confidence" to matchResult.confidence
             )
             
+            // تشفير البيانات الحساسة إذا كان التشفير مفعّلاً
+            val dataToSend = if (encryptionManager.isEncryptionEnabled()) {
+                try {
+                    val encryptedData = encryptionManager.encryptSensitiveData(smsData)
+                    mapOf(
+                        "encrypted" to true,
+                        "data" to encryptedData
+                    )
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to encrypt data, sending unencrypted")
+                    smsData + mapOf("encrypted" to false)
+                }
+            } else {
+                smsData + mapOf("encrypted" to false)
+            }
+            
             directConnectionManager.sendPaymentConfirmation(
                 matchResult.transaction.id,
-                smsData
+                dataToSend
             )
 
             // Send webhook notification (للتوافق مع الأنظمة القديمة)

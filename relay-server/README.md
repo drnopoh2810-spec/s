@@ -1,157 +1,33 @@
-# 🌐 SMS Gateway Relay Server
+# SMS Gateway Relay Server
 
-## نشر على Replit (مجاني)
+## النشر على Huggingface Spaces
 
-### الخطوات:
-
-1. **إنشاء حساب:**
-   ```
-   https://replit.com/signup
-   ```
-
-2. **إنشاء Repl جديد:**
-   ```
-   - اضغط: Create Repl
-   - Template: Node.js
-   - Title: sms-gateway-relay
-   ```
-
-3. **رفع الملفات:**
-   ```
-   - انسخ محتوى server.js
-   - انسخ محتوى package.json
-   - الصق في Replit
-   ```
-
-4. **تشغيل:**
-   ```
-   اضغط: Run
-   ```
-
-5. **الحصول على الرابط:**
-   ```
-   سيظهر رابط مثل:
-   https://sms-gateway-relay.YOUR_USERNAME.repl.co
-   ```
-
-6. **استخدام في التطبيق:**
-   ```
-   WebSocket URL:
-   wss://sms-gateway-relay.YOUR_USERNAME.repl.co/device/mydevice
-   
-   Public API URL:
-   https://sms-gateway-relay.YOUR_USERNAME.repl.co/api/mydevice
-   ```
-
----
-
-## نشر على Render (مجاني)
-
-### الخطوات:
-
-1. **إنشاء حساب:**
-   ```
-   https://render.com/register
-   ```
-
-2. **إنشاء Web Service:**
-   ```
-   - New → Web Service
-   - Connect GitHub repo أو رفع الملفات
-   - Environment: Node
-   - Build Command: npm install
-   - Start Command: npm start
-   ```
-
-3. **الحصول على الرابط:**
-   ```
-   https://sms-gateway-relay.onrender.com
-   ```
-
----
-
-## نشر على Railway (مجاني)
-
-### الخطوات:
-
-1. **إنشاء حساب:**
-   ```
-   https://railway.app
-   ```
-
-2. **New Project:**
-   ```
-   - Deploy from GitHub repo
-   - أو: Empty Project → Add Service
-   ```
-
-3. **الحصول على الرابط:**
-   ```
-   https://sms-gateway-relay.up.railway.app
-   ```
-
----
+1. اذهب إلى https://huggingface.co/spaces
+2. اضغط "Create new Space"
+3. اختر:
+   - **SDK**: Docker أو Gradio
+   - **Space name**: sms-gateway-relay
+4. ارفع الملفات: `app.py`, `requirements.txt`
+5. انتظر حتى يعمل الـ Space
 
 ## الاستخدام
 
-### في التطبيق:
-
-```kotlin
-// في الإعدادات، أدخل:
-Relay URL: wss://YOUR_RELAY_URL/device/mydevice
-
-// التطبيق سيتصل تلقائياً ويحصل على:
-Public URL: https://YOUR_RELAY_URL/api/mydevice
+### التطبيق (Android) يتصل بـ:
+```
+wss://YOUR_USERNAME-sms-gateway-relay.hf.space/device
 ```
 
-### في الموقع:
-
-```javascript
-const BASE_URL = "https://YOUR_RELAY_URL/api/mydevice/api/v1";
-const API_KEY = "YOUR_API_KEY";
-
-fetch(`${BASE_URL}/transactions`, {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${API_KEY}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    id: "order-001",
-    amount: 500,
-    phoneNumber: "01012345678"
-  })
-});
+### الرابط العام لأي موقع:
+```
+https://YOUR_USERNAME-sms-gateway-relay.hf.space/gateway/{deviceId}/api/v1/transactions
 ```
 
----
+## مثال
 
-## المميزات
-
-- ✅ مجاني 100%
-- ✅ يعمل من أي شبكة
-- ✅ HTTPS تلقائي
-- ✅ رابط ثابت
-- ✅ WebSocket مستقر
-- ✅ Heartbeat تلقائي
-- ✅ إعادة اتصال تلقائية
-
----
-
-## الصيانة
-
-### Keep Alive (لمنع النوم):
-
-```javascript
-// أضف في server.js:
-setInterval(() => {
-  console.log('Keep alive ping');
-}, 5 * 60 * 1000); // كل 5 دقائق
-```
-
-### Monitoring:
-
-```
-https://YOUR_RELAY_URL/health
-https://YOUR_RELAY_URL/devices
+```bash
+# إنشاء معاملة من أي مكان في العالم
+curl -X POST "https://myuser-sms-gateway-relay.hf.space/gateway/gw-abc123/api/v1/transactions" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"TX001","amount":500,"phoneNumber":"01012345678","walletType":"VODAFONE_CASH"}'
 ```

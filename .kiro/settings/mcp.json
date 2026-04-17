@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "SMSGatewayApp Docs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://gitmcp.io/multiOTP/SMSGatewayApp"],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "Scarlet Docs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://gitmcp.io/Tinder/Scarlet"]
+    },
+    "httpsms Docs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://gitmcp.io/NdoleStudio/httpsms"]
+    },
+    "android-sms-gateway Docs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://gitmcp.io/capcom6/android-sms-gateway"]
+    },
+    "textbee Docs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://gitmcp.io/vernu/textbee"]
+    }
+  }
+}

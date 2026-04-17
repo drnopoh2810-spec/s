@@ -10,7 +10,8 @@ import javax.inject.Singleton
 @Singleton
 class CleanupManager @Inject constructor(
     private val pendingTransactionDao: PendingTransactionDao,
-    private val smsLogDao: SmsLogDao
+    private val smsLogDao: SmsLogDao,
+    private val webhookLogDao: com.sms.paymentgateway.data.dao.WebhookLogDao
 ) {
     private var cleanupJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -46,6 +47,11 @@ class CleanupManager @Inject constructor(
             val smsCutoff = System.currentTimeMillis() - (7 * 24 * 3600000)
             smsLogDao.deleteOldLogs(smsCutoff)
             Timber.d("Deleted old SMS logs")
+
+            // Delete old webhook logs (older than 30 days)
+            val webhookCutoff = System.currentTimeMillis() - (30 * 24 * 3600000L)
+            webhookLogDao.deleteOldLogs(webhookCutoff)
+            Timber.d("Deleted old webhook logs")
 
             Timber.i("Cleanup completed successfully")
         } catch (e: Exception) {

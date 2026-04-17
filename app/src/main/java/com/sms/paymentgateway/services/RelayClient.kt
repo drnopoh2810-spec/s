@@ -36,6 +36,9 @@ class RelayClient @Inject constructor(
     private val lastSuccessfulConnection = AtomicLong(0L)
     private val lastPongReceived = AtomicLong(0L)
 
+    /** callback لمعالجة طلبات HTTP الواردة عبر الـ Relay */
+    var tunnelRequestHandler: ((method: String, path: String, headers: Map<String, String>, body: String?) -> TunnelResponse)? = null
+
     private @Volatile var webSocket: WebSocket? = null
 
     private val handler = Handler(Looper.getMainLooper())
@@ -335,19 +338,36 @@ class RelayClient @Inject constructor(
                     val method    = json.optString("method", "GET")
                     val path      = json.optString("path", "/")
                     Log.d(TAG, "📥 طلب وارد: $method $path")
-                    // الرد يتم عبر ApiServer أو RelayClient مؤقتاً
+
+                    // تمرير الطلب لـ SmartTunnelManager ليعالجه ApiServer
+                    val body = json.optString("body").takeIf { it.isNotBlank() }
+                    val headers = mutableMapOf<String, String>()
+                    json.optJSONObject("headers")?.let { h ->
+                        h.keys().forEach { k -> headers[k] = h.optString(k) }
+                    }
+
+                    // معالجة الطلب عبر requestHandler المسجل
+                    val response = try {
+                        tunnelRequestHandler?.invoke(method, path, headers, body)
+                            ?: TunnelResponse(200, """{"status":"ok","gateway":"running"}""")
+                    } catch (e: Exception) {
+                        TunnelResponse(500, """{"error":"${e.message}"}""")
+                    }
+
                     if (requestId.isNotBlank()) {
                         sendMessage(JSONObject().apply {
                             put("type", "response")
                             put("requestId", requestId)
                             put("request_id", requestId)
-                            put("status", 200)
-                            put("status_code", 200)
-                            put("body", JSONObject().apply {
-                                put("status", "ok")
-                                put("message", "Request received")
+                            put("status", response.statusCode)
+                            put("status_code", response.statusCode)
+                            put("body", response.body)
+                            put("headers", JSONObject().apply {
+                                put("Content-Type", "application/json")
+                                put("Access-Control-Allow-Origin", "*")
                             })
                         }.toString())
+                        Log.d(TAG, "📤 Response sent: ${response.statusCode} for $requestId")
                     }
                 }
                 else -> Log.d(TAG, "❓ رسالة واردة: ${json.optString("type")}")
@@ -441,3 +461,6 @@ class RelayClient @Inject constructor(
         networkCallback = null
     }
 }
+
+// TunnelResponse مشترك بين RelayClient و SmartTunnelManager
+// (معرّف في SmartTunnelManager.kt)

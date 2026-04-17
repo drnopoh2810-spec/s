@@ -7,7 +7,9 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import com.sms.paymentgateway.utils.BatteryOptimizationManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,13 +24,23 @@ class PaymentGatewayService : Service() {
     @Inject lateinit var cleanupManager: CleanupManager
     @Inject lateinit var relayClient: RelayClient
     @Inject lateinit var connectionMonitor: ConnectionMonitor
+    @Inject lateinit var batteryOptimizationManager: BatteryOptimizationManager
+    @Inject lateinit var expirationChecker: ExpirationChecker
+    @Inject lateinit var smartTunnelManager: SmartTunnelManager
 
     private val CHANNEL_ID      = "payment_gateway_channel"
     private val NOTIFICATION_ID = 1
+    
+    /** Wake Lock للحفاظ على الخدمة نشطة */
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         Timber.i("🚀 بدء خدمة بوابة الدفع - Huggingface Relay")
+        
+        // الحصول على Wake Lock
+        acquireWakeLock()
+        
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
 
@@ -52,10 +64,27 @@ class PaymentGatewayService : Service() {
         // بدء RelayClient للاتصال بـ Huggingface Relay
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { 
+                // ربط معالج الطلبات بـ ApiServer
+                relayClient.tunnelRequestHandler = { method, path, headers, body ->
+                    apiServer.handleTunnelRequest(method, path, headers, body)
+                }
                 relayClient.start()
                 Timber.i("✅ RelayClient متصل بـ Huggingface Relay") 
             }.onFailure { 
                 Timber.e(it, "❌ فشل الاتصال بـ Relay Server") 
+            }
+        }
+
+        // بدء SmartTunnel - يولد رابط https عام
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                smartTunnelManager.requestHandler = { method, path, headers, body ->
+                    apiServer.handleTunnelRequest(method, path, headers, body)
+                }
+                smartTunnelManager.start()
+                Timber.i("✅ SmartTunnel نشط - رابط عام جاهز")
+            }.onFailure {
+                Timber.e(it, "❌ فشل تشغيل SmartTunnel")
             }
         }
 
@@ -66,10 +95,26 @@ class PaymentGatewayService : Service() {
         }.onFailure { 
             Timber.e(it, "❌ فشل تشغيل مراقبة الاتصال") 
         }
+        
+        // بدء فحص انتهاء صلاحية المعاملات
+        runCatching {
+            expirationChecker.startPeriodicCheck()
+            Timber.i("✅ فحص انتهاء الصلاحية نشط")
+        }.onFailure {
+            Timber.e(it, "❌ فشل تشغيل فحص انتهاء الصلاحية")
+        }
+        
+        // تجديد Wake Lock كل 5 دقائق
+        scheduleWakeLockRenewal()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.i("🔄 إعادة تشغيل الخدمة")
+        
+        // التأكد من Wake Lock نشط
+        if (!batteryOptimizationManager.isWakeLockHeld()) {
+            acquireWakeLock()
+        }
         
         // التأكد من أن RelayClient يعمل
         CoroutineScope(Dispatchers.IO).launch {
@@ -89,9 +134,65 @@ class PaymentGatewayService : Service() {
         runCatching { cleanupManager.stopCleanup() }
         runCatching { relayClient.stop() }
         runCatching { connectionMonitor.stopMonitoring() }
+        runCatching { expirationChecker.stopPeriodicCheck() }
+        runCatching { smartTunnelManager.stop() }
+        
+        // إطلاق Wake Lock
+        releaseWakeLock()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+    
+    /**
+     * الحصول على Wake Lock
+     */
+    private fun acquireWakeLock() {
+        try {
+            wakeLock = batteryOptimizationManager.acquireWakeLock(
+                duration = 10 * 60 * 1000L, // 10 دقائق
+                tag = "PaymentGatewayService::WakeLock"
+            )
+            Timber.i("🔋 Wake lock acquired for service")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Error acquiring wake lock")
+        }
+    }
+    
+    /**
+     * إطلاق Wake Lock
+     */
+    private fun releaseWakeLock() {
+        try {
+            batteryOptimizationManager.releaseWakeLock()
+            wakeLock = null
+            Timber.i("🔓 Wake lock released")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Error releasing wake lock")
+        }
+    }
+    
+    /**
+     * جدولة تجديد Wake Lock
+     */
+    private fun scheduleWakeLockRenewal() {
+        CoroutineScope(Dispatchers.IO).launch {
+            while (true) {
+                kotlinx.coroutines.delay(5 * 60 * 1000L) // كل 5 دقائق
+                
+                try {
+                    if (batteryOptimizationManager.isWakeLockHeld()) {
+                        batteryOptimizationManager.renewWakeLock()
+                        Timber.d("🔄 Wake lock renewed")
+                    } else {
+                        acquireWakeLock()
+                        Timber.w("⚠️ Wake lock was lost, re-acquired")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "❌ Error renewing wake lock")
+                }
+            }
+        }
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

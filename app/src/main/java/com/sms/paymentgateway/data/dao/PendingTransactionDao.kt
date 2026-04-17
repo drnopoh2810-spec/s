@@ -25,6 +25,36 @@ interface PendingTransactionDao {
     @Query("UPDATE pending_transactions SET status = 'EXPIRED' WHERE expiresAt < :currentTime AND status = 'PENDING'")
     suspend fun expireOldTransactions(currentTime: Long)
     
+    @Query("SELECT COUNT(*) FROM pending_transactions WHERE status = 'EXPIRED'")
+    suspend fun getExpiredTransactionsCount(): Int
+    
+    @Query("SELECT * FROM pending_transactions WHERE status = 'EXPIRED' ORDER BY expiresAt DESC LIMIT :limit")
+    suspend fun getExpiredTransactions(limit: Int = 100): List<PendingTransaction>
+
+    @Query("""
+        SELECT * FROM pending_transactions 
+        WHERE (:status IS NULL OR status = :status)
+        AND (:walletType IS NULL OR walletType = :walletType)
+        ORDER BY createdAt DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getFilteredTransactions(
+        status: String? = null,
+        walletType: String? = null,
+        limit: Int = 50,
+        offset: Int = 0
+    ): List<PendingTransaction>
+
+    @Query("""
+        SELECT COUNT(*) FROM pending_transactions
+        WHERE (:status IS NULL OR status = :status)
+        AND (:walletType IS NULL OR walletType = :walletType)
+    """)
+    suspend fun countFilteredTransactions(
+        status: String? = null,
+        walletType: String? = null
+    ): Int
+
     @Delete
     suspend fun deleteTransaction(transaction: PendingTransaction)
 }

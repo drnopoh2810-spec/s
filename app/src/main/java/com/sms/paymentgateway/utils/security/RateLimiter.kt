@@ -5,66 +5,92 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Rate Limiter per client (IP or API Key)
+ * يدعم حدوداً مختلفة لكل نوع endpoint
+ */
 @Singleton
 class RateLimiter @Inject constructor() {
 
     private val requests = ConcurrentHashMap<String, MutableList<Long>>()
+    private val clientLimits = ConcurrentHashMap<String, ClientLimit>()
 
-    /**
-     * Check if a request from the given IP is allowed
-     * @param ip IP address
-     * @param maxRequests Maximum requests allowed in the time window
-     * @param windowMs Time window in milliseconds (default: 1 minute)
-     * @return true if allowed, false if rate limit exceeded
-     */
-    fun isAllowed(
-        ip: String,
-        maxRequests: Int = 100,
-        windowMs: Long = 60000
-    ): Boolean {
+    // حدود افتراضية حسب نوع العملية
+    companion object {
+        const val LIMIT_DEFAULT    = 100  // طلبات عامة / دقيقة
+        const val LIMIT_BULK       = 10   // bulk operations / دقيقة
+        const val LIMIT_AUTH       = 20   // محاولات مصادقة / دقيقة
+        const val LIMIT_ANALYTICS  = 60   // analytics / دقيقة
+        const val WINDOW_MS        = 60_000L
+    }
+
+    fun isAllowed(ip: String, maxRequests: Int = LIMIT_DEFAULT, windowMs: Long = WINDOW_MS): Boolean {
+        val key = ip
         val now = System.currentTimeMillis()
-        val ipRequests = requests.getOrPut(ip) { mutableListOf() }
+        val ipRequests = requests.getOrPut(key) { mutableListOf() }
 
         synchronized(ipRequests) {
-            // Remove old requests outside the time window
             ipRequests.removeIf { it < now - windowMs }
-
             return if (ipRequests.size < maxRequests) {
                 ipRequests.add(now)
                 true
             } else {
-                Timber.w("Rate limit exceeded for IP: $ip (${ipRequests.size}/$maxRequests)")
+                Timber.w("Rate limit exceeded for: $key (${ipRequests.size}/$maxRequests)")
                 false
             }
         }
     }
 
-    /**
-     * Reset rate limit for a specific IP
-     */
-    fun reset(ip: String) {
-        requests.remove(ip)
-        Timber.d("Rate limit reset for IP: $ip")
+    /** تحقق مع تحديد نوع العملية */
+    fun isAllowedForOperation(clientKey: String, operation: RateLimitOperation): Boolean {
+        val limit = when (operation) {
+            RateLimitOperation.BULK       -> LIMIT_BULK
+            RateLimitOperation.AUTH       -> LIMIT_AUTH
+            RateLimitOperation.ANALYTICS  -> LIMIT_ANALYTICS
+            RateLimitOperation.DEFAULT    -> LIMIT_DEFAULT
+        }
+        return isAllowed("$clientKey:${operation.name}", limit)
     }
 
-    /**
-     * Clear all rate limit data
-     */
-    fun clearAll() {
-        requests.clear()
-        Timber.i("All rate limits cleared")
+    /** تعيين حد مخصص لعميل */
+    fun setClientLimit(apiKey: String, maxRequests: Int, windowMs: Long = WINDOW_MS) {
+        clientLimits[apiKey] = ClientLimit(maxRequests, windowMs)
+        Timber.i("Custom limit set for client: $maxRequests req/${windowMs}ms")
     }
 
-    /**
-     * Get current request count for an IP
-     */
-    fun getRequestCount(ip: String, windowMs: Long = 60000): Int {
+    /** تحقق بالحد المخصص للعميل إن وُجد */
+    fun isAllowedForClient(apiKey: String): Boolean {
+        val custom = clientLimits[apiKey]
+        return if (custom != null) {
+            isAllowed("client:$apiKey", custom.maxRequests, custom.windowMs)
+        } else {
+            isAllowed("client:$apiKey", LIMIT_DEFAULT)
+        }
+    }
+
+    fun reset(ip: String) { requests.remove(ip); Timber.d("Rate limit reset for: $ip") }
+    fun clearAll() { requests.clear(); clientLimits.clear(); Timber.i("All rate limits cleared") }
+
+    fun getStats(): Map<String, Any> {
+        val now = System.currentTimeMillis()
+        return mapOf(
+            "trackedClients" to requests.size,
+            "customLimits" to clientLimits.size,
+            "activeRequests" to requests.values.sumOf { list ->
+                synchronized(list) { list.count { it > now - WINDOW_MS } }
+            }
+        )
+    }
+
+    fun getRequestCount(ip: String, windowMs: Long = WINDOW_MS): Int {
         val now = System.currentTimeMillis()
         val ipRequests = requests[ip] ?: return 0
-
         synchronized(ipRequests) {
             ipRequests.removeIf { it < now - windowMs }
             return ipRequests.size
         }
     }
 }
+
+enum class RateLimitOperation { DEFAULT, BULK, AUTH, ANALYTICS }
+data class ClientLimit(val maxRequests: Int, val windowMs: Long)
