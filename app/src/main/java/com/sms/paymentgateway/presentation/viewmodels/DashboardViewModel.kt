@@ -69,11 +69,19 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun updateConnectionInfo() {
+        // نستخدم SmartTunnel كمصدر رئيسي + RelayClient كـ fallback
+        val tunnelActive = smartTunnelManager.state.value.status == SmartTunnelManager.TunnelStatus.ACTIVE
+        val relayActive  = relayClient.isConnected()
+        val isActive     = tunnelActive || relayActive
+
         _connectionInfo.value = ConnectionInfo(
-            isActive = relayClient.isConnected(),
-            connectionUrl = "Huggingface Relay",
-            connectedClients = if (relayClient.isConnected()) 1 else 0,
-            clientsList = if (relayClient.isConnected()) listOf("Relay Server") else emptyList()
+            isActive = isActive,
+            connectionUrl = if (tunnelActive)
+                smartTunnelManager.state.value.publicUrl ?: "Huggingface Relay"
+            else
+                "Huggingface Relay",
+            connectedClients = if (isActive) 1 else 0,
+            clientsList = if (isActive) listOf("Relay Server") else emptyList()
         )
     }
 

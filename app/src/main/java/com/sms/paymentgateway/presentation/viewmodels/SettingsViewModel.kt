@@ -5,13 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.sms.paymentgateway.services.ApiDocumentationGenerator
 import com.sms.paymentgateway.services.DocLanguage
 import com.sms.paymentgateway.services.RelayClient
+import com.sms.paymentgateway.services.SmartTunnelManager
 import com.sms.paymentgateway.utils.security.ConnectionCard
 import com.sms.paymentgateway.utils.security.SecurityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -21,6 +20,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val securityManager: SecurityManager,
     private val relayClient: RelayClient,
+    private val smartTunnelManager: SmartTunnelManager,
     private val apiDocGenerator: ApiDocumentationGenerator
 ) : ViewModel() {
 
@@ -36,22 +36,39 @@ class SettingsViewModel @Inject constructor(
     private val _isDefaultRelay = MutableStateFlow(securityManager.isUsingDefaultRelayUrl())
     val isDefaultRelay: StateFlow<Boolean> = _isDefaultRelay.asStateFlow()
 
-    private val _relayConnected = MutableStateFlow(relayClient.isConnected())
-    val relayConnected: StateFlow<Boolean> = _relayConnected.asStateFlow()
-
     private val _ipWhitelist    = MutableStateFlow(securityManager.getIpWhitelist().toList())
     val ipWhitelist: StateFlow<List<String>> = _ipWhitelist.asStateFlow()
 
-    /** بطاقة الاتصال المباشر التي يولدها الجهاز */
-    private val _connectionCard  = MutableStateFlow(securityManager.buildConnectionCard())
-    val connectionCard: StateFlow<ConnectionCard?> = _connectionCard.asStateFlow()
+    /**
+     * حالة الاتصال - تجمع بين SmartTunnel و RelayClient
+     * SmartTunnel هو المصدر الرئيسي للاتصال الآن
+     */
+    val relayConnected: StateFlow<Boolean> = smartTunnelManager.state
+        .map { it.status == SmartTunnelManager.TunnelStatus.ACTIVE }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * بطاقة الاتصال - تُبنى من رابط SmartTunnel الفعلي
+     */
+    val connectionCard: StateFlow<ConnectionCard?> = smartTunnelManager.state
+        .map { tunnelState ->
+            val publicUrl = tunnelState.publicUrl
+            if (publicUrl != null) {
+                // الرابط الكامل للـ API
+                val apiUrl = "$publicUrl/api/v1"
+                ConnectionCard(apiUrl = apiUrl, apiKey = securityManager.getApiKey())
+            } else {
+                // fallback للرابط المحفوظ
+                securityManager.buildConnectionCard()
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), securityManager.buildConnectionCard())
 
     // ─── Actions ────────────────────────────────────────────────────────────
 
     fun regenerateApiKey() = viewModelScope.launch {
-        val newKey = securityManager.regenerateApiKey()
-        _apiKey.value = newKey
-        _connectionCard.value = securityManager.buildConnectionCard()
+        securityManager.regenerateApiKey()
+        _apiKey.value = securityManager.getApiKey()
     }
 
     fun updateWebhookUrl(url: String) = viewModelScope.launch {
@@ -61,27 +78,30 @@ class SettingsViewModel @Inject constructor(
 
     fun updateRelayUrl(url: String) = viewModelScope.launch {
         val trimmed = url.trim()
-        securityManager.setRelayUrl(trimmed)      // setRelayUrl تحذف المخصص إذا كان مطابقاً للافتراضي أو فارغاً
+        securityManager.setRelayUrl(trimmed)
+        // إعادة تشغيل كلا الـ clients
         relayClient.stop()
+        smartTunnelManager.stop()
+        kotlinx.coroutines.delay(500)
         relayClient.start()
+        smartTunnelManager.start()
         _relayUrl.value = securityManager.getRelayUrl()
         _isDefaultRelay.value = securityManager.isUsingDefaultRelayUrl()
-        _relayConnected.value = relayClient.isConnected()
-        _connectionCard.value = securityManager.buildConnectionCard()
     }
 
     fun resetRelayUrlToDefault() = viewModelScope.launch {
         securityManager.clearRelayUrl()
         relayClient.stop()
+        smartTunnelManager.stop()
+        kotlinx.coroutines.delay(500)
         relayClient.start()
+        smartTunnelManager.start()
         _relayUrl.value = securityManager.getRelayUrl()
         _isDefaultRelay.value = true
-        _relayConnected.value = relayClient.isConnected()
-        _connectionCard.value = securityManager.buildConnectionCard()
     }
 
     fun refreshRelayStatus() {
-        _relayConnected.value = relayClient.isConnected()
+        // لا شيء - الحالة تأتي تلقائياً من SmartTunnelManager.state
     }
 
     fun addIpToWhitelist(ip: String) = viewModelScope.launch {
@@ -99,11 +119,9 @@ class SettingsViewModel @Inject constructor(
         _ipWhitelist.value = emptyList()
     }
 
-    /** تحميل الدوكيومنتيشن بلغة معينة */
     suspend fun downloadDocumentation(lang: DocLanguage): Result<File> = withContext(Dispatchers.IO) {
         try {
-            val file = apiDocGenerator.saveToDownloads(lang)
-            Result.success(file)
+            Result.success(apiDocGenerator.saveToDownloads(lang))
         } catch (e: Exception) {
             Result.failure(e)
         }
