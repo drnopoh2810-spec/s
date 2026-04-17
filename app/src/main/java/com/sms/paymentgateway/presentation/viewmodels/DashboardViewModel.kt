@@ -10,6 +10,7 @@ import com.sms.paymentgateway.data.repository.AnalyticsRepository
 import com.sms.paymentgateway.data.repository.DashboardAnalytics
 import com.sms.paymentgateway.services.RelayClient
 import com.sms.paymentgateway.services.ConnectionMonitor
+import com.sms.paymentgateway.services.SmartTunnelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -23,7 +24,7 @@ class DashboardViewModel @Inject constructor(
     private val relayClient: RelayClient,
     private val connectionMonitor: ConnectionMonitor,
     private val analyticsRepository: AnalyticsRepository,
-    private val smartTunnelManager: com.sms.paymentgateway.services.SmartTunnelManager
+    private val smartTunnelManager: SmartTunnelManager
 ) : ViewModel() {
 
     val pendingTransactions: StateFlow<List<PendingTransaction>> = 
