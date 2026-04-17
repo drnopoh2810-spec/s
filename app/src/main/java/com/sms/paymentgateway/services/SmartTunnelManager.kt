@@ -366,12 +366,12 @@ class SmartTunnelManager @Inject constructor(
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun getDeviceId(): String {
-        val stored = securityManager.getApiKey().take(12)
         val androidId = android.provider.Settings.Secure.getString(
             context.contentResolver,
             android.provider.Settings.Secure.ANDROID_ID
         )?.take(8) ?: "device"
-        return "gw-$androidId-$stored".replace("[^a-zA-Z0-9-]".toRegex(), "")
+        val keyPart = securityManager.getApiKey().take(12)
+        return "gw-$androidId-$keyPart".replace("[^a-zA-Z0-9-]".toRegex(), "")
     }
 
     private fun buildPublicUrl(server: RelayServer, deviceId: String): String {

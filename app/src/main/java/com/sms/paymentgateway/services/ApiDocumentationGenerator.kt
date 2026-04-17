@@ -27,8 +27,10 @@ class ApiDocumentationGenerator @Inject constructor(
 
     /** يولّد نص الدوكيومنتيشن الكامل للغة المطلوبة */
     fun generate(lang: DocLanguage): String {
-        val relayUrl = securityManager.getRelayUrl() ?: "wss://YOUR-RELAY-URL.hf.space/device"
-        val apiUrl = relayUrl.replace("wss://", "https://").replace("/device", "/api/v1")
+        val relayBase = securityManager.getRelayHttpBase()
+        val deviceId  = getDeviceId()
+        // الرابط الصحيح: https://RELAY/gateway/{deviceId}/api/v1
+        val apiUrl = "$relayBase/gateway/$deviceId/api/v1"
         val key = securityManager.getApiKey()
         return when (lang) {
             DocLanguage.CURL       -> buildCurl(apiUrl, key)
@@ -40,6 +42,15 @@ class ApiDocumentationGenerator @Inject constructor(
             DocLanguage.DART       -> buildDart(apiUrl, key)
             DocLanguage.CSHARP     -> buildCsharp(apiUrl, key)
         }
+    }
+
+    private fun getDeviceId(): String {
+        val androidId = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        )?.take(8) ?: "device"
+        val apiKey = securityManager.getApiKey().take(12)
+        return "gw-$androidId-$apiKey".replace("[^a-zA-Z0-9-]".toRegex(), "")
     }
 
     /** يحفظ الملف في Downloads/SMS-Gateway/ ويعيد مساره */
