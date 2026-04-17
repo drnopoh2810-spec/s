@@ -51,14 +51,12 @@ class SmartTunnelManager @Inject constructor(
         private const val TAG = "SmartTunnel"
 
         // Relay servers مرتبة حسب الأولوية
-        // ← غيّر YOUR_USERNAME لاسم حسابك على Huggingface
         private val RELAY_SERVERS = listOf(
             RelayServer(
                 name = "Primary Relay",
                 wsUrl  = "wss://nopoh22-sms-relay-server.hf.space/device",
                 httpBase = "https://nopoh22-sms-relay-server.hf.space"
             )
-            // يمكن إضافة relay servers احتياطية هنا
         )
 
         private const val HEARTBEAT_MS = 25_000L
