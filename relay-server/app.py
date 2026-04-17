@@ -111,7 +111,6 @@ async def device_endpoint(ws: WebSocket):
                     devices[device_id] = session
 
                     # بناء الرابط العام الكامل (absolute URL)
-                    import os
                     space_host = os.environ.get("SPACE_HOST", "nopoh22-sms-relay-server.hf.space")
                     public_url = f"https://{space_host}/gateway/{device_id}"
 
