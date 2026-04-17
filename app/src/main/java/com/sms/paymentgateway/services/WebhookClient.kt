@@ -172,20 +172,3 @@ class WebhookClient @Inject constructor(
         val timestamp: Long
     )
 }
-
-    data class PaymentConfirmationPayload(
-        val event: String,
-        val transactionId: String,
-        val smsData: SmsDataPayload,
-        val confidence: Double,
-        val processedAt: Long
-    )
-
-    data class SmsDataPayload(
-        val walletType: String,
-        val walletTxId: String?,
-        val amount: Double?,
-        val senderPhone: String?,
-        val timestamp: Long
-    )
-}
