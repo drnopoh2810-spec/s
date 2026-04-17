@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: بناء APK للاختبار
+    name: بناء APK (نسختان)
     runs-on: ubuntu-latest
 
     steps:
@@ -17,8 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: إنشاء local.properties
-        run: |
-          echo "RELAY_API_KEY=${RELAY_API_KEY:-default_api_key_for_ci}" > local.properties
+        run: echo "RELAY_API_KEY=${RELAY_API_KEY:-default_api_key_for_ci}" > local.properties
 
       - name: إعداد JDK 17
         uses: actions/setup-java@v4
@@ -30,14 +29,23 @@ jobs:
       - name: منح صلاحية تشغيل gradlew
         run: chmod +x gradlew
 
-      - name: بناء Debug APK
+      - name: بناء كلتا النسختين
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: رفع Debug APK
+      # ─── رفع نسخة الهواتف الحديثة (Android 8+) ───────────────────────────
+      - name: رفع APK الهواتف الحديثة (Android 8+)
         uses: actions/upload-artifact@v4
         with:
-          name: SMS-Payment-Gateway-Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: SMS-Gateway-Modern-Android8Plus
+          path: app/build/outputs/apk/modern/debug/app-modern-debug.apk
+          retention-days: 30
+
+      # ─── رفع نسخة الهواتف القديمة (Android 5+) ───────────────────────────
+      - name: رفع APK الهواتف القديمة (Android 5+)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMS-Gateway-Legacy-Android5Plus
+          path: app/build/outputs/apk/legacy/debug/app-legacy-debug.apk
           retention-days: 30
 
   release:
@@ -53,8 +61,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: إنشاء local.properties
-        run: |
-          echo "RELAY_API_KEY=${RELAY_API_KEY:-default_api_key_for_ci}" > local.properties
+        run: echo "RELAY_API_KEY=${RELAY_API_KEY:-default_api_key_for_ci}" > local.properties
 
       - name: إعداد JDK 17
         uses: actions/setup-java@v4
@@ -66,10 +73,10 @@ jobs:
       - name: منح صلاحية تشغيل gradlew
         run: chmod +x gradlew
 
-      - name: بناء Debug APK
+      - name: بناء Debug APKs
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: بناء Release APK (غير موقّع)
+      - name: بناء Release APKs (غير موقّعة)
         run: ./gradlew assembleRelease --no-daemon
 
       - name: استخراج رقم الإصدار
@@ -84,23 +91,29 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
           name: بوابة دفع SMS v${{ steps.version.outputs.version }}
           body: |
-            ## بوابة دفع SMS — إصدار جديد
+            ## بوابة دفع SMS — إصدار جديد 🚀
 
-            ### تحميل APK
-            حمّل ملف APK من الأصول أدناه وثبّته على هاتف Android.
+            ### 📱 اختر النسخة المناسبة لهاتفك
 
-            ### المستجدات
-            - بناء تلقائي من آخر تحديث للكود
-            - رابط API مباشر يُنشئه الجهاز تلقائياً
+            | الملف | الهواتف المدعومة |
+            |-------|-----------------|
+            | `app-modern-debug.apk` | Android 8.0+ (الأحدث والأفضل) |
+            | `app-legacy-debug.apk` | Android 5.0+ (للهواتف القديمة) |
+
+            ### ✨ المميزات
+            - رابط API عام يُنشأ تلقائياً لكل جهاز
+            - SmartTunnel: اتصال مباشر بدون إعداد
+            - دعم Vodafone Cash, Orange Money, Etisalat Cash
             - واجهة عربية كاملة
 
-            ### المتطلبات
-            - Android 8.0 (API 26) أو أعلى
+            ### 📋 المتطلبات
             - صلاحية قراءة رسائل SMS
             - اتصال بالإنترنت
           files: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/apk/modern/debug/app-modern-debug.apk
+            app/build/outputs/apk/legacy/debug/app-legacy-debug.apk
+            app/build/outputs/apk/modern/release/app-modern-release-unsigned.apk
+            app/build/outputs/apk/legacy/release/app-legacy-release-unsigned.apk
           draft: false
           prerelease: false
         env:
