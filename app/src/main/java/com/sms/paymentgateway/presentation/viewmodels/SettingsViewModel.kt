@@ -52,13 +52,12 @@ class SettingsViewModel @Inject constructor(
      */
     val connectionCard: StateFlow<ConnectionCard?> = smartTunnelManager.state
         .map { tunnelState ->
-            val publicUrl = tunnelState.publicUrl
+            val publicUrl = tunnelState.publicUrl  // رابط كامل من الـ Relay
             if (publicUrl != null) {
-                // الرابط الكامل للـ API
-                val apiUrl = "$publicUrl/api/v1"
-                ConnectionCard(apiUrl = apiUrl, apiKey = securityManager.getApiKey())
+                // publicUrl = "https://relay.hf.space/gateway/{deviceId}"
+                // الرابط الكامل للـ API = publicUrl (بدون /api/v1 - يضيفه المستخدم في طلباته)
+                ConnectionCard(apiUrl = publicUrl, apiKey = securityManager.getApiKey())
             } else {
-                // fallback للرابط المحفوظ
                 securityManager.buildConnectionCard()
             }
         }

@@ -366,24 +366,25 @@ class SmartTunnelManager @Inject constructor(
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private fun getDeviceId(): String {
-        val androidId = android.provider.Settings.Secure.getString(
-            context.contentResolver,
-            android.provider.Settings.Secure.ANDROID_ID
-        )?.take(8) ?: "device"
-        val keyPart = securityManager.getApiKey().take(12)
-        return "gw-$androidId-$keyPart".replace("[^a-zA-Z0-9-]".toRegex(), "")
+        // نستخدم نفس الـ deviceId المحفوظ في SecurityManager لضمان التطابق
+        return securityManager.buildDeviceId()
     }
 
     private fun buildPublicUrl(server: RelayServer, deviceId: String): String {
-        // الرابط العام الحقيقي: https://SPACE.hf.space/gateway/{deviceId}
-        // أي طلب لـ /gateway/{deviceId}/api/v1/... سيصل للتطبيق مباشرة
+        // fallback إذا لم يرسل الـ Relay الرابط - يبني رابط كامل
         return "${server.httpBase}/gateway/$deviceId"
     }
 
-    /** الرابط الكامل لإنشاء معاملة - للعرض في الـ UI */
+    /** الرابط الكامل للـ API - دائماً absolute URL */
     fun getFullApiUrl(): String? {
         val state = _state.value
-        return if (state.publicUrl != null) "${state.publicUrl}/api/v1" else null
+        val url = state.publicUrl ?: return null
+        // إذا كان الرابط نسبياً، أضف الـ base
+        return if (url.startsWith("http")) {
+            url  // رابط كامل من الـ Relay
+        } else {
+            "${RELAY_SERVERS[0].httpBase}$url"  // أضف الـ base
+        }
     }
 
     fun cleanup() {

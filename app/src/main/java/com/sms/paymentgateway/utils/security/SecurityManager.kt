@@ -297,19 +297,28 @@ class SecurityManager @Inject constructor(
         if (!direct.isNullOrBlank()) return direct.removeSuffix("/connect").let {
             if (it.contains("/api/v1")) it else "$it/api/v1"
         }
-        // الرابط عبر SmartTunnel: https://RELAY/gateway/{deviceId}/api/v1
+        // الرابط عبر SmartTunnel: https://RELAY/gateway/{deviceId}
+        // لا نضيف /api/v1 هنا - المستخدم يضيفها في طلباته
         val base = getRelayHttpBase()
         val deviceId = buildDeviceId()
-        return "$base/gateway/$deviceId/api/v1"
+        return "$base/gateway/$deviceId"
     }
 
     /** يبني deviceId بنفس الطريقة التي يستخدمها SmartTunnelManager */
     fun buildDeviceId(): String {
+        // نحفظ الـ deviceId لضمان ثباته حتى لو تغيّر الـ API Key
+        val cached = prefs.getString("device_id_cached", null)
+        if (!cached.isNullOrBlank()) return cached
+
         val androidId = Settings.Secure.getString(
             context.contentResolver, Settings.Secure.ANDROID_ID
         )?.take(8) ?: "device"
         val keyPart = getApiKey().take(12)
-        return "gw-$androidId-$keyPart".replace("[^a-zA-Z0-9-]".toRegex(), "")
+        val deviceId = "gw-$androidId-$keyPart".replace("[^a-zA-Z0-9-]".toRegex(), "")
+
+        // حفظ الـ deviceId لضمان ثباته
+        prefs.edit().putString("device_id_cached", deviceId).apply()
+        return deviceId
     }
 
     fun buildConnectionCard(): ConnectionCard? {

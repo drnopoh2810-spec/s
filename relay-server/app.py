@@ -110,9 +110,10 @@ async def device_endpoint(ws: WebSocket):
                     session = DeviceSession(device_id, ws, device_token)
                     devices[device_id] = session
 
-                    # بناء الرابط العام - يحتوي على deviceId فقط
-                    # الأمان الحقيقي يأتي من API Key في كل طلب
-                    public_url = f"/gateway/{device_id}"
+                    # بناء الرابط العام الكامل (absolute URL)
+                    import os
+                    space_host = os.environ.get("SPACE_HOST", "nopoh22-sms-relay-server.hf.space")
+                    public_url = f"https://{space_host}/gateway/{device_id}"
 
                     await ws.send_text(json.dumps({
                         "type": "registered",
