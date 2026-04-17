@@ -194,11 +194,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openBatterySettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            batteryOptimizationManager.requestBatteryOptimizationExemption()
-        } else {
-            Toast.makeText(this, "لا حاجة لهذا الإعداد في هذا الإصدار", Toast.LENGTH_SHORT).show()
-        }
+        // الـ version check موجود داخل requestBatteryOptimizationExemption نفسها
+        batteryOptimizationManager.requestBatteryOptimizationExemption()
     }
     
     /**

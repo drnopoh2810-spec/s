@@ -7,7 +7,6 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
-import androidx.annotation.RequiresApi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,8 +49,11 @@ class BatteryOptimizationManager @Inject constructor(
      * طلب استثناء من Battery Optimization
      * يفتح شاشة الإعدادات للمستخدم
      */
-    @RequiresApi(Build.VERSION_CODES.M)
     fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            Log.i(TAG, "Battery optimization not applicable on Android < 6.0")
+            return
+        }
         try {
             if (isBatteryOptimizationDisabled()) {
                 Log.i(TAG, "✅ Already exempted from battery optimization")
